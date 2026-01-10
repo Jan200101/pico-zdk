@@ -11,9 +11,8 @@ pub fn build(b: *std.Build) void {
             .root_source_file = b.path("src/lib.zig"),
             .target = target,
             .optimize = optimize,
-            .imports = &.{},
+            .link_libc = true,
         }),
     });
-    lib.linkLibC();
     b.installArtifact(lib);
 }
