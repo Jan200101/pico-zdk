@@ -15,6 +15,13 @@ const fd_t = std.Io.File.Handle;
 const native_os = builtin.os.tag;
 const maxInt = std.math.maxInt;
 
+var stderr_writer: File.Writer = .{
+    .io = io(),
+    .interface = Io.File.Writer.initInterface(&.{}),
+    .file = .stderr(),
+    .mode = .streaming,
+};
+
 fn write(fd: fd_t, bytes: []const u8) File.Writer.Error!usize {
     const max_count = switch (native_os) {
         .linux => 0x7ffff000,
@@ -169,7 +176,7 @@ fn async(
     _: Alignment,
     _: *const fn (_: *const anyopaque, _: *anyopaque) void,
 ) ?*Io.AnyFuture {
-    @panic("unimplemented");
+    @panic("async unimplemented");
 }
 
 fn concurrent(
@@ -180,7 +187,7 @@ fn concurrent(
     _: Alignment,
     _: *const fn (_: *const anyopaque, _: *anyopaque) void,
 ) Io.ConcurrentError!*Io.AnyFuture {
-    @panic("unimplemented");
+    @panic("concurrent unimplemented");
 }
 
 fn await(
@@ -189,7 +196,7 @@ fn await(
     _: []u8,
     _: Alignment,
 ) void {
-    @panic("unimplemented");
+    @panic("await unimplemented");
 }
 
 fn cancel(
@@ -198,11 +205,11 @@ fn cancel(
     _: []u8,
     _: Alignment,
 ) void {
-    @panic("unimplemented");
+    @panic("cancel unimplemented");
 }
 
 fn select(_: ?*anyopaque, _: []const *Io.AnyFuture) Io.Cancelable!usize {
-    @panic("unimplemented");
+    @panic("select unimplemented");
 }
 
 fn groupAsync(
@@ -212,7 +219,7 @@ fn groupAsync(
     _: Alignment,
     _: *const fn (_: *const anyopaque) Io.Cancelable!void,
 ) void {
-    @panic("unimplemented");
+    @panic("groupAsync unimplemented");
 }
 
 fn groupConcurrent(
@@ -222,19 +229,19 @@ fn groupConcurrent(
     _: Alignment,
     _: *const fn (_: *const anyopaque) Io.Cancelable!void,
 ) Io.ConcurrentError!void {
-    @panic("unimplemented");
+    @panic("groupConcurrent unimplemented");
 }
 
 fn groupAwait(_: ?*anyopaque, _: *Io.Group, _: *anyopaque) Io.Cancelable!void {
-    @panic("unimplemented");
+    @panic("groupAwait unimplemented");
 }
 
 fn groupCancel(_: ?*anyopaque, _: *Io.Group, _: *anyopaque) void {
-    @panic("unimplemented");
+    @panic("groupCancel unimplemented");
 }
 
 fn recancel(_: ?*anyopaque) void {
-    @panic("unimplemented");
+    @panic("recancel unimplemented");
 }
 
 fn swapCancelProtection(_: ?*anyopaque, _: Io.CancelProtection) Io.CancelProtection {
@@ -242,23 +249,23 @@ fn swapCancelProtection(_: ?*anyopaque, _: Io.CancelProtection) Io.CancelProtect
 }
 
 fn checkCancel(_: ?*anyopaque) Io.Cancelable!void {
-    @panic("unimplemented");
+    @panic("checkCancel unimplemented");
 }
 
 fn futexWait(_: ?*anyopaque, _: *const u32, _: u32, _: Io.Timeout) Io.Cancelable!void {
-    @panic("unimplemented");
+    @panic("futexWait unimplemented");
 }
 
 fn futexWaitUncancelable(_: ?*anyopaque, _: *const u32, _: u32) void {
-    @panic("unimplemented");
+    @panic("futexWaitUncancelable unimplemented");
 }
 
 fn futexWake(_: ?*anyopaque, _: *const u32, _: u32) void {
-    @panic("unimplemented");
+    @panic("futexWake unimplemented");
 }
 
 fn dirCreateDir(_: ?*anyopaque, _: Dir, _: []const u8, _: Dir.Permissions) Dir.CreateDirError!void {
-    @panic("unimplemented");
+    @panic("dirCreateDir unimplemented");
 }
 
 fn dirCreateDirPath(
@@ -267,7 +274,7 @@ fn dirCreateDirPath(
     _: []const u8,
     _: Dir.Permissions,
 ) Dir.CreateDirPathError!Dir.CreatePathStatus {
-    @panic("unimplemented");
+    @panic("dirCreateDirPath unimplemented");
 }
 
 fn dirCreateDirPathOpen(
@@ -277,11 +284,11 @@ fn dirCreateDirPathOpen(
     _: Dir.Permissions,
     _: Dir.OpenOptions,
 ) Dir.CreateDirPathOpenError!Dir {
-    @panic("unimplemented");
+    @panic("dirCreateDirPathOpen unimplemented");
 }
 
 fn dirStat(_: ?*anyopaque, _: Dir) Dir.StatError!Dir.Stat {
-    @panic("unimplemented");
+    @panic("dirStat unimplemented");
 }
 
 fn dirStatFile(
@@ -290,7 +297,7 @@ fn dirStatFile(
     _: []const u8,
     _: Dir.StatFileOptions,
 ) Dir.StatFileError!File.Stat {
-    @panic("unimplemented");
+    @panic("dirStatFile unimplemented");
 }
 
 fn dirAccess(
@@ -299,7 +306,7 @@ fn dirAccess(
     _: []const u8,
     _: Dir.AccessOptions,
 ) Dir.AccessError!void {
-    @panic("unimplemented");
+    @panic("dirAccess unimplemented");
 }
 
 fn dirCreateFile(
@@ -308,7 +315,7 @@ fn dirCreateFile(
     _: []const u8,
     _: File.CreateFlags,
 ) File.OpenError!File {
-    @panic("unimplemented");
+    @panic("dirCreateFile unimplemented");
 }
 
 fn dirCreateFileAtomic(
@@ -317,7 +324,7 @@ fn dirCreateFileAtomic(
     _: []const u8,
     _: Dir.CreateFileAtomicOptions,
 ) Dir.CreateFileAtomicError!File.Atomic {
-    @panic("unimplemented");
+    @panic("dirCreateFileAtomic unimplemented");
 }
 
 fn dirOpenFile(
@@ -326,7 +333,8 @@ fn dirOpenFile(
     _: []const u8,
     _: File.OpenFlags,
 ) File.OpenError!File {
-    @panic("unimplemented");
+    return error.NoDevice;
+    //@panic("dirOpenFile unimplemented");
 }
 
 fn dirOpenDir(
@@ -335,29 +343,31 @@ fn dirOpenDir(
     _: []const u8,
     _: Dir.OpenOptions,
 ) Dir.OpenError!Dir {
-    @panic("unimplemented");
+    @panic("dirOpenDir unimplemented");
 }
 
-fn dirClose(_: ?*anyopaque, _: []const Dir) void {}
+fn dirClose(_: ?*anyopaque, _: []const Dir) void {
+    @panic("dirClose unimplemented");
+}
 
 fn dirRead(_: ?*anyopaque, _: *Dir.Reader, _: []Dir.Entry) Dir.Reader.Error!usize {
-    @panic("unimplemented");
+    @panic("dirRead unimplemented");
 }
 
 fn dirRealPath(_: ?*anyopaque, _: Dir, _: []u8) Dir.RealPathError!usize {
-    @panic("unimplemented");
+    @panic("dirRealPath unimplemented");
 }
 
 fn dirRealPathFile(_: ?*anyopaque, _: Dir, _: []const u8, _: []u8) Dir.RealPathFileError!usize {
-    @panic("unimplemented");
+    @panic("dirRealPathFile unimplemented");
 }
 
 fn dirDeleteFile(_: ?*anyopaque, _: Dir, _: []const u8) Dir.DeleteFileError!void {
-    @panic("unimplemented");
+    @panic("dirDeleteFile unimplemented");
 }
 
 fn dirDeleteDir(_: ?*anyopaque, _: Dir, _: []const u8) Dir.DeleteDirError!void {
-    @panic("unimplemented");
+    @panic("dirDeleteDir unimplemented");
 }
 
 fn dirRename(
@@ -367,7 +377,7 @@ fn dirRename(
     _: Dir,
     _: []const u8,
 ) Dir.RenameError!void {
-    @panic("unimplemented");
+    @panic("dirRename unimplemented");
 }
 
 fn dirRenamePreserve(
@@ -377,7 +387,7 @@ fn dirRenamePreserve(
     _: Dir,
     _: []const u8,
 ) Dir.RenamePreserveError!void {
-    @panic("unimplemented");
+    @panic("dirRenamePreserve unimplemented");
 }
 
 fn dirSymLink(
@@ -387,15 +397,15 @@ fn dirSymLink(
     _: []const u8,
     _: Dir.SymLinkFlags,
 ) Dir.SymLinkError!void {
-    @panic("unimplemented");
+    @panic("dirSymLink unimplemented");
 }
 
 fn dirReadLink(_: ?*anyopaque, _: Dir, _: []const u8, _: []u8) Dir.ReadLinkError!usize {
-    @panic("unimplemented");
+    @panic("dirReadLink unimplemented");
 }
 
 fn dirSetOwner(_: ?*anyopaque, _: Dir, _: ?File.Uid, _: ?File.Gid) Dir.SetOwnerError!void {
-    @panic("unimplemented");
+    @panic("dirSetOwner unimplemented");
 }
 
 fn dirSetFileOwner(
@@ -420,7 +430,7 @@ fn dirSetFilePermissions(
     _: Dir.Permissions,
     _: Dir.SetFilePermissionsOptions,
 ) Dir.SetFilePermissionsError!void {
-    @panic("unimplemented");
+    @panic("dirSetFilePermissions unimplemented");
 }
 
 fn dirSetTimestamps(
@@ -429,7 +439,7 @@ fn dirSetTimestamps(
     _: []const u8,
     _: Dir.SetTimestampsOptions,
 ) Dir.SetTimestampsError!void {
-    @panic("unimplemented");
+    @panic("dirSetTimestamps unimplemented");
 }
 
 fn dirHardLink(
@@ -440,18 +450,20 @@ fn dirHardLink(
     _: []const u8,
     _: Dir.HardLinkOptions,
 ) Dir.HardLinkError!void {
-    @panic("unimplemented");
+    @panic("dirHardLink unimplemented");
 }
 
 fn fileStat(_: ?*anyopaque, _: File) File.StatError!File.Stat {
-    @panic("unimplemented");
+    @panic("fileStat unimplemented");
 }
 
 fn fileLength(_: ?*anyopaque, _: File) File.LengthError!u64 {
-    @panic("unimplemented");
+    @panic("fileLength unimplemented");
 }
 
-fn fileClose(_: ?*anyopaque, _: []const File) void {}
+fn fileClose(_: ?*anyopaque, _: []const File) void {
+    @panic("fileClose unimplemented");
+}
 
 fn fileWriteStreaming(
     _: ?*anyopaque,
@@ -460,23 +472,18 @@ fn fileWriteStreaming(
     data: []const []const u8,
     splat: usize,
 ) File.Writer.Error!usize {
-    var written: usize = 0;
+    if (header.len != 0) {
+        return try write(file.handle, header);
+    }
 
-    if (header.len != 0)
-        written += try write(file.handle, header);
-
-    for (data[0 .. data.len - 1]) |bytes| {
-        if (bytes.len != 0) {
-            written += try write(file.handle, bytes);
-        }
+    for (data[0 .. data.len - 1]) |buf| {
+        if (buf.len == 0) continue;
+        return try write(file.handle, buf);
     }
 
     const pattern = data[data.len - 1];
-    for (0..splat) |_| {
-        written += try write(file.handle, pattern);
-    }
-
-    return written;
+    if (pattern.len == 0 or splat == 0) return 0;
+    return try write(file.handle, pattern);
 }
 
 fn fileWritePositional(
@@ -487,7 +494,8 @@ fn fileWritePositional(
     _: usize,
     _: u64,
 ) File.WritePositionalError!usize {
-    @panic("unimplemented");
+    // a basic libc implementation does not have pwrite
+    return error.Unseekable;
 }
 
 fn fileWriteFileStreaming(
@@ -497,7 +505,7 @@ fn fileWriteFileStreaming(
     _: *File.Reader,
     _: Io.Limit,
 ) File.Writer.WriteFileError!usize {
-    @panic("unimplemented");
+    @panic("fileWriteFileStreaming unimplemented");
 }
 
 fn fileWriteFilePositional(
@@ -508,51 +516,51 @@ fn fileWriteFilePositional(
     _: Io.Limit,
     _: u64,
 ) File.WriteFilePositionalError!usize {
-    @panic("unimplemented");
+    @panic("fileWriteFilePositional unimplemented");
 }
 
 fn fileReadStreaming(_: ?*anyopaque, _: File, _: []const []u8) File.Reader.Error!usize {
-    @panic("unimplemented");
+    @panic("fileReadStreaming unimplemented");
 }
 
 fn fileReadPositional(_: ?*anyopaque, _: File, _: []const []u8, _: u64) File.ReadPositionalError!usize {
-    @panic("unimplemented");
+    @panic("fileReadPositional unimplemented");
 }
 
 fn fileSeekBy(_: ?*anyopaque, _: File, _: i64) File.SeekError!void {
-    @panic("unimplemented");
+    @panic("fileSeekBy unimplemented");
 }
 
 fn fileSeekTo(_: ?*anyopaque, _: File, _: u64) File.SeekError!void {
-    @panic("unimplemented");
+    @panic("fileSeekTo unimplemented");
 }
 
 fn fileSync(_: ?*anyopaque, _: File) File.SyncError!void {
-    @panic("unimplemented");
+    @panic("fileSync unimplemented");
 }
 
 fn fileIsTty(_: ?*anyopaque, _: File) Io.Cancelable!bool {
-    @panic("unimplemented");
+    @panic("fileIsTty unimplemented");
 }
 
 fn fileEnableAnsiEscapeCodes(_: ?*anyopaque, _: File) File.EnableAnsiEscapeCodesError!void {
-    @panic("unimplemented");
+    @panic("fileEnableAnsiEscapeCodes unimplemented");
 }
 
 fn fileSupportsAnsiEscapeCodes(_: ?*anyopaque, _: File) Io.Cancelable!bool {
-    @panic("unimplemented");
+    @panic("fileSupportsAnsiEscapeCodes unimplemented");
 }
 
 fn fileSetLength(_: ?*anyopaque, _: File, _: u64) File.SetLengthError!void {
-    @panic("unimplemented");
+    @panic("fileSetLength unimplemented");
 }
 
 fn fileSetOwner(_: ?*anyopaque, _: File, _: ?File.Uid, _: ?File.Gid) File.SetOwnerError!void {
-    @panic("unimplemented");
+    @panic("fileSetOwner unimplemented");
 }
 
 fn fileSetPermissions(_: ?*anyopaque, _: File, _: File.Permissions) File.SetPermissionsError!void {
-    @panic("unimplemented");
+    @panic("fileSetPermissions unimplemented");
 }
 
 fn fileSetTimestamps(
@@ -560,27 +568,27 @@ fn fileSetTimestamps(
     _: File,
     _: File.SetTimestampsOptions,
 ) File.SetTimestampsError!void {
-    @panic("unimplemented");
+    @panic("fileSetTimestampsunimplemented");
 }
 
 fn fileLock(_: ?*anyopaque, _: File, _: File.Lock) File.LockError!void {
-    @panic("unimplemented");
+    @panic("fileLock unimplemented");
 }
 
 fn fileTryLock(_: ?*anyopaque, _: File, _: File.Lock) File.LockError!bool {
-    @panic("unimplemented");
+    @panic("fileTryLock unimplemented");
 }
 
 fn fileUnlock(_: ?*anyopaque, _: File) void {
-    @panic("unimplemented");
+    @panic("fileUnlock unimplemented");
 }
 
 fn fileDowngradeLock(_: ?*anyopaque, _: File) File.DowngradeLockError!void {
-    @panic("unimplemented");
+    @panic("fileDowngradeLock unimplemented");
 }
 
 fn fileRealPath(_: ?*anyopaque, _: File, _: []u8) File.RealPathError!usize {
-    @panic("unimplemented");
+    @panic("fileRealPath unimplemented");
 }
 
 fn fileHardLink(
@@ -594,71 +602,76 @@ fn fileHardLink(
 }
 
 fn processExecutableOpen(_: ?*anyopaque, _: File.OpenFlags) process.OpenExecutableError!File {
-    @panic("unimplemented");
+    return error.NoDevice;
 }
 
 fn processExecutablePath(_: ?*anyopaque, _: []u8) process.ExecutablePathError!usize {
-    @panic("unimplemented");
+    return error.NoDevice;
 }
 
 fn lockStderr(_: ?*anyopaque, _: ?Io.Terminal.Mode) Io.Cancelable!Io.LockedStderr {
-    @panic("unimplemented");
+    return .{
+        .file_writer = &stderr_writer,
+        .terminal_mode = .no_color,
+    };
 }
 
-fn tryLockStderr(_: ?*anyopaque, _: ?Io.Terminal.Mode) Io.Cancelable!?Io.LockedStderr {
-    @panic("unimplemented");
+fn tryLockStderr(userdata: ?*anyopaque, terminal_mode: ?Io.Terminal.Mode) Io.Cancelable!?Io.LockedStderr {
+    return try lockStderr(userdata, terminal_mode);
 }
 
 fn unlockStderr(_: ?*anyopaque) void {
-    @panic("unimplemented");
+    stderr_writer.interface.flush() catch {};
+    stderr_writer.interface.end = 0;
+    stderr_writer.interface.buffer = &.{};
 }
 
 fn processSetCurrentDir(_: ?*anyopaque, _: Dir) process.SetCurrentDirError!void {
-    @panic("unimplemented");
+    @panic("processSetCurrentDir unimplemented");
 }
 
 fn processReplace(_: ?*anyopaque, _: process.ReplaceOptions) process.ReplaceError {
-    @panic("unimplemented");
+    @panic("processReplace unimplemented");
 }
 
 fn processReplacePath(_: ?*anyopaque, _: Dir, _: process.ReplaceOptions) process.ReplaceError {
-    @panic("unimplemented");
+    @panic("processReplacePath unimplemented");
 }
 
 fn processSpawn(_: ?*anyopaque, _: process.SpawnOptions) process.SpawnError!process.Child {
-    @panic("unimplemented");
+    @panic("processSpawn unimplemented");
 }
 
 fn processSpawnPath(_: ?*anyopaque, _: Dir, _: process.SpawnOptions) process.SpawnError!process.Child {
-    @panic("unimplemented");
+    @panic("processSpawnPath unimplemented");
 }
 
 fn childWait(_: ?*anyopaque, _: *process.Child) process.Child.WaitError!process.Child.Term {
-    @panic("unimplemented");
+    @panic("childWait unimplemented");
 }
 
 fn childKill(_: ?*anyopaque, _: *process.Child) void {
-    @panic("unimplemented");
+    @panic("childKill unimplemented");
 }
 
 fn progressParentFile(_: ?*anyopaque) std.Progress.ParentFileError!File {
-    @panic("unimplemented");
+    @panic("progressParentFile unimplemented");
 }
 
 fn now(_: ?*anyopaque, _: Io.Clock) Io.Clock.Error!Io.Timestamp {
-    @panic("unimplemented");
+    @panic("now unimplemented");
 }
 
 fn sleep(_: ?*anyopaque, _: Io.Timeout) Io.SleepError!void {
-    @panic("unimplemented");
+    @panic("sleep unimplemented");
 }
 
 fn random(_: ?*anyopaque, _: []u8) void {
-    @panic("unimplemented");
+    @panic("random unimplemented");
 }
 
 fn randomSecure(_: ?*anyopaque, _: []u8) Io.RandomSecureError!void {
-    @panic("unimplemented");
+    @panic("randomSecure unimplemented");
 }
 
 fn netListenIp(
@@ -666,7 +679,7 @@ fn netListenIp(
     _: IpAddress,
     _: IpAddress.ListenOptions,
 ) IpAddress.ListenError!net.Server {
-    @panic("unimplemented");
+    @panic("netListenIp unimplemented");
 }
 
 fn netListenUnix(
@@ -674,11 +687,11 @@ fn netListenUnix(
     _: *const net.UnixAddress,
     _: net.UnixAddress.ListenOptions,
 ) net.UnixAddress.ListenError!net.Socket.Handle {
-    @panic("unimplemented");
+    @panic("netListenUnix unimplemented");
 }
 
 fn netAccept(_: ?*anyopaque, _: net.Socket.Handle) net.Server.AcceptError!net.Stream {
-    @panic("unimplemented");
+    @panic("netAccept unimplemented");
 }
 
 fn netBindIp(
@@ -686,7 +699,7 @@ fn netBindIp(
     _: *const IpAddress,
     _: IpAddress.BindOptions,
 ) IpAddress.BindError!net.Socket {
-    @panic("unimplemented");
+    @panic("netBindIp unimplemented");
 }
 
 fn netConnectIp(
@@ -694,26 +707,26 @@ fn netConnectIp(
     _: *const IpAddress,
     _: IpAddress.ConnectOptions,
 ) IpAddress.ConnectError!net.Stream {
-    @panic("unimplemented");
+    @panic("netConnectIp unimplemented");
 }
 
 fn netConnectUnix(
     _: ?*anyopaque,
     _: *const net.UnixAddress,
 ) net.UnixAddress.ConnectError!net.Socket.Handle {
-    @panic("unimplemented");
+    @panic("netConnectUnix unimplemented");
 }
 
 fn netClose(_: ?*anyopaque, _: []const net.Socket.Handle) void {
-    @panic("unimplemented");
+    @panic("netClose unimplemented");
 }
 
 fn netShutdown(_: ?*anyopaque, _: net.Socket.Handle, _: net.ShutdownHow) net.ShutdownError!void {
-    @panic("unimplemented");
+    @panic("netShutdown unimplemented");
 }
 
 fn netRead(_: ?*anyopaque, _: net.Socket.Handle, _: [][]u8) net.Stream.Reader.Error!usize {
-    @panic("unimplemented");
+    @panic("netRead unimplemented");
 }
 
 fn netWrite(
@@ -723,7 +736,7 @@ fn netWrite(
     _: []const []const u8,
     _: usize,
 ) net.Stream.Writer.Error!usize {
-    @panic("unimplemented");
+    @panic("netWrite unimplemented");
 }
 
 fn netWriteFile(
@@ -733,7 +746,7 @@ fn netWriteFile(
     _: *File.Reader,
     _: Io.Limit,
 ) net.Stream.Writer.WriteFileError!usize {
-    @panic("unimplemented");
+    @panic("netWriteFile unimplemented");
 }
 
 fn netSend(
@@ -742,7 +755,7 @@ fn netSend(
     _: []net.OutgoingMessage,
     _: net.SendFlags,
 ) struct { ?net.Socket.SendError, usize } {
-    @panic("unimplemented");
+    @panic("netSend unimplemented");
 }
 
 fn netReceive(
@@ -753,18 +766,18 @@ fn netReceive(
     _: net.ReceiveFlags,
     _: Io.Timeout,
 ) struct { ?net.Socket.ReceiveTimeoutError, usize } {
-    @panic("unimplemented");
+    @panic("netReceive unimplemented");
 }
 
 fn netInterfaceNameResolve(
     _: ?*anyopaque,
     _: *const net.Interface.Name,
 ) net.Interface.Name.ResolveError!net.Interface {
-    @panic("unimplemented");
+    @panic("netInterfaceNameResolve unimplemented");
 }
 
 fn netInterfaceName(_: ?*anyopaque, _: net.Interface) net.Interface.NameError!net.Interface.Name {
-    @panic("unimplemented");
+    @panic("netInterfaceName unimplemented");
 }
 
 fn netLookup(
@@ -773,5 +786,5 @@ fn netLookup(
     _: *Io.Queue(HostName.LookupResult),
     _: HostName.LookupOptions,
 ) net.HostName.LookupError!void {
-    @panic("unimplemented");
+    @panic("netLookup unimplemented");
 }
