@@ -8,11 +8,10 @@ project(pico-zdk C CXX ASM)
 
 pico_sdk_init()
 
-zig_import_target(
+zig_import_targets(
     PATH "${CMAKE_CURRENT_SOURCE_DIR}"
     COMPILE_TARGET thumb-other-eabi
     COMPILE_CPU cortex_m0plus
-    STEPS example
     REQUIRED
 )
 
@@ -22,7 +21,7 @@ add_executable(pico_zdk
 
 target_link_libraries(pico_zdk PUBLIC
 	pico_stdlib
-	example
+	zig::example
 )
 target_link_options(pico_zdk PRIVATE -Wl,--print-memory-usage)
 

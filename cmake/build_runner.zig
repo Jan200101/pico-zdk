@@ -448,12 +448,6 @@ pub fn main(init: process.Init.Minimal) !void {
         run.max_rss_is_default = true;
     }
 
-    if (step_name == null) {
-        // todo serialize
-        try serializeSteps(builder);
-        process.exit(0);
-    }
-
     prepare(arena, builder, targets.items, &run, graph.random_seed) catch |err| switch (err) {
         error.DependencyLoopDetected => {
             // Perhaps in the future there could be an Advanced Options flag
@@ -479,34 +473,12 @@ pub fn main(init: process.Init.Minimal) !void {
         fuzz,
     );
 
-    var target_info: std.ArrayList(TargetInfo) = .empty;
-    defer target_info.deinit(graph.arena);
-
-    var stdout = initStdoutWriter(io);
-    defer stdout.flush() catch {};
-
-    var found_step: bool = false;
-
-    for (run.step_stack.keys()) |step| {
-        for (step.dependencies.items) |other_step| {
-            const compile_step = other_step.cast(Step.Compile) orelse continue;
-            if (!std.mem.eql(u8, compile_step.name, step_name.?)) continue;
-
-            try std.json.Stringify.value(TargetInfo{
-                .name = compile_step.name,
-                .kind = compile_step.kind,
-                .linkage = compile_step.linkage,
-                .emitted_path = compile_step.getEmittedBin().getPath2(builder, step),
-            }, .{}, stdout);
-
-            found_step = true;
-            break;
-        }
+    if (step_name == null) {
+        // todo serialize
+        try serializeSteps(builder);
     }
 
-    try stdout.flush();
-
-    return process.exit(if (found_step) 0 else 2);
+    process.exit(0);
 }
 
 const TargetInfo = struct {
@@ -560,12 +532,13 @@ fn serializeStepsNested(
     seen: *std.StringHashMapUnmanaged(void),
     step: *Step,
 ) !void {
-    if (step.cast(Step.Compile)) |compile_step|
-        try appendUnseenStep(b, steps, seen, compile_step);
+    if (step.cast(Step.InstallArtifact)) |install_artifact| {
+        try appendUnseenStep(b, steps, seen, install_artifact);
+    }
 
     for (step.dependencies.items) |other_step| {
-        if (other_step.cast(Step.Compile)) |compile_step|
-            try appendUnseenStep(b, steps, seen, compile_step);
+        if (other_step.cast(Step.InstallArtifact)) |install_artifact|
+            try appendUnseenStep(b, steps, seen, install_artifact);
         try serializeStepsNested(b, steps, seen, other_step);
     }
 }
@@ -574,9 +547,10 @@ fn appendUnseenStep(
     b: *std.Build,
     steps: *std.ArrayList(TargetInfo),
     seen: *std.StringHashMapUnmanaged(void),
-    compile_step: *Step.Compile,
+    install_artifact: *Step.InstallArtifact,
 ) !void {
     const arena = b.graph.arena;
+    const compile_step = install_artifact.artifact;
 
     const entry = try seen.getOrPut(arena, compile_step.name);
     if (entry.found_existing)
@@ -586,6 +560,14 @@ fn appendUnseenStep(
         .name = compile_step.name,
         .kind = compile_step.kind,
         .linkage = compile_step.linkage,
+        .emitted_path = blk: {
+            if (install_artifact.dest_dir) |dest_dir| {
+                const full_dest_path = b.getInstallPath(dest_dir, install_artifact.dest_sub_path);
+                break :blk full_dest_path;
+            }
+
+            break :blk null;
+        },
     });
 }
 

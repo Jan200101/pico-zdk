@@ -122,23 +122,6 @@ pub const debug = struct {
     };
 };
 
-pub const Environ = struct {
-    // We don't really have an "environment" but Io.Threaded demands it
-    pub const Block = [:null]const ?[*:0]const u8;
-};
-
-// pub const Thread = struct {
-//     pub const Futex = struct {
-//         pub fn wait(_: *const std.atomic.Value(u32), _: u32, _: ?u64) error{Timeout}!void {
-//             return;
-//         }
-
-//         pub fn wake(_: *const std.atomic.Value(u32), _: u32) void {
-//             return;
-//         }
-//     };
-// };
-
 fn panic(_: []const u8, _: ?*builtin.StackTrace, _: ?usize) noreturn {}
 
 export fn test_print() void {
