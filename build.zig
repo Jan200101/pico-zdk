@@ -12,6 +12,7 @@ pub fn build(b: *std.Build) void {
             .target = target,
             .optimize = optimize,
             .link_libc = true,
+            .single_threaded = true,
         }),
     });
     b.installArtifact(lib);
