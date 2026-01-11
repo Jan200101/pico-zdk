@@ -19,27 +19,38 @@ function(zig_import_targets)
     if (NOT ZARG_COMPILE_TARGET)
         set(ZARG_COMPILE_TARGET "native")
     endif()
-    if (ZARG_COMPILE_CPU)
-        set(ZARG_COMPILE_CPU "-Dcpu=${ZARG_COMPILE_CPU}")
-    endif()
 
     list(JOIN ZARG_TARGETS " " "PLAIN_TARGETS")
 
-    set(BUILD_COMMAND
-        ${ZIG_EXE} build
-        --build-runner "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/build_runner.zig"
-        "-Dtarget=${ZARG_COMPILE_TARGET}"
-        ${ZARG_COMPILE_CPU}
-        ${PLAIN_TARGETS}
-    )
+    list(APPEND ZIG_BUILD_ARGS --build-runner "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/build_runner.zig")
+    list(APPEND ZIG_BUILD_ARGS "-Dtarget=${ZARG_COMPILE_TARGET}")
+    if (ZARG_COMPILE_CPU)
+        list(APPEND ZIG_BUILD_ARGS "-Dcpu=${ZARG_COMPILE_CPU}")
+    endif()
+
+    if("${CMAKE_BUILD_TYPE}" STREQUAL "DEBUG")
+        # Debug is default
+    elseif("${CMAKE_BUILD_TYPE}" STREQUAL "MinSizeRel")
+        list(APPEND ZIG_BUILD_ARGS --release=small)
+    else()
+        list(APPEND ZIG_BUILD_ARGS --release=safe)
+    endif()
+
+    list(APPEND ZIG_BUILD_ARGS ${PLAIN_TARGETS})
+
+    set(BUILD_COMMAND ${ZIG_EXE} build ${ZIG_BUILD_ARGS})
 
     execute_process(
         COMMAND ${BUILD_COMMAND} --steps
         WORKING_DIRECTORY ${ZARG_PATH}
         OUTPUT_VARIABLE TARGET_LIST
         RESULT_VARIABLE STATUS_CODE
+        #COMMAND_ECHO STDOUT
     )
 
+    # This is needed to trigger relinking when something changed on the zig side
+    # Zig is pretty good at caching and knowing when rebuilds are needed so
+    # thsi will take no valuable compile time when nothing needs compiling
     add_custom_target(zig_build ALL
         COMMAND ${BUILD_COMMAND}
         WORKING_DIRECTORY ${ZARG_PATH}
@@ -70,7 +81,7 @@ function(zig_import_targets)
         string(JSON TARGET_LINKAGE GET "${TARGET_INFO}" linkage)
         string(JSON TARGET_PATH GET "${TARGET_INFO}" emitted_path)
 
-        message(CHECK_START "Importing Zig Target ${TARGET_NAME}")
+        message(CHECK_START "importing ${TARGET_NAME}")
 
         if (NOT TARGET_PATH)
             message(CHECK_FAIL "no emit path provided")
