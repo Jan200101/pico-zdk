@@ -110,7 +110,7 @@ pub fn main(init: process.Init.Minimal) !void {
     );
 
     var targets = std.array_list.Managed([]const u8).init(arena);
-    var step_name: ?[]const u8 = null;
+    var show_steps: bool = false;
     var debug_log_scopes = std.array_list.Managed([]const u8).init(arena);
 
     var install_prefix: ?[]const u8 = null;
@@ -337,10 +337,8 @@ pub fn main(init: process.Init.Minimal) !void {
                     fatal("unable to parse jobs count '{s}': {t}", .{ text, err });
                 if (n < 1) fatal("number of jobs must be at least 1", .{});
                 threaded.setAsyncLimit(.limited(n));
-            } else if (mem.eql(u8, arg, "--step")) {
-                if (step_name != null) fatal("step already speacified", .{});
-                const next_arg = nextArgOrFatal(args, &arg_idx);
-                step_name = next_arg;
+            } else if (mem.eql(u8, arg, "--steps")) {
+                show_steps = true;
             } else if (mem.eql(u8, arg, "--")) {
                 builder.args = argsRest(args, arg_idx);
                 break;
@@ -473,10 +471,8 @@ pub fn main(init: process.Init.Minimal) !void {
         fuzz,
     );
 
-    if (step_name == null) {
-        // todo serialize
+    if (show_steps)
         try serializeSteps(builder);
-    }
 
     process.exit(0);
 }

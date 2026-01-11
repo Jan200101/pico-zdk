@@ -25,16 +25,24 @@ function(zig_import_targets)
 
     list(JOIN ZARG_TARGETS " " "PLAIN_TARGETS")
 
+    set(BUILD_COMMAND
+        ${ZIG_EXE} build
+        --build-runner "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/build_runner.zig"
+        "-Dtarget=${ZARG_COMPILE_TARGET}"
+        ${ZARG_COMPILE_CPU}
+        ${PLAIN_TARGETS}
+    )
+
     execute_process(
-        COMMAND
-            ${ZIG_EXE} build
-            --build-runner "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/build_runner.zig"
-            "-Dtarget=${ZARG_COMPILE_TARGET}"
-            ${ZARG_COMPILE_CPU}
-            ${PLAIN_TARGETS}
+        COMMAND ${BUILD_COMMAND} --steps
         WORKING_DIRECTORY ${ZARG_PATH}
         OUTPUT_VARIABLE TARGET_LIST
         RESULT_VARIABLE STATUS_CODE
+    )
+
+    add_custom_target(zig_build ALL
+        COMMAND ${BUILD_COMMAND}
+        WORKING_DIRECTORY ${ZARG_PATH}
     )
 
     if (STATUS_CODE EQUAL 2)
@@ -95,28 +103,12 @@ function(zig_import_targets)
             endif()
             return()
         endif()
-        add_custom_command(
-            OUTPUT ${TARGET_PATH}
-            WORKING_DIRECTORY ${ZARG_PATH}
-            COMMAND
-                ${ZIG_EXE} build
-                --build-runner "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/build_runner.zig"
-                "-Dtarget=${ZARG_COMPILE_TARGET}"
-                ${ZARG_COMPILE_CPU}
-                ${PLAIN_TARGETS}
-                --step "${TARGET_NAME}"
-        )
-
-        add_custom_target(zig_${TARGET_NAME}_import
-            DEPENDS ${TARGET_PATH}
-        )
 
         set_property(
             TARGET zig::${TARGET_NAME}
             PROPERTY
                 IMPORTED_LOCATION "${TARGET_PATH}"
         )
-        add_dependencies(zig::${TARGET_NAME} zig_${TARGET_NAME}_import)
 
         message(CHECK_PASS "${TARGET_PATH}")
     endforeach()
