@@ -42,8 +42,5 @@ pub fn panic(msg: []const u8, first_trace_addr: ?usize) noreturn {
         else => {}, // Panicked while printing the recursive panic message.
     }
 
-    switch (builtin.mode) {
-        .Debug => while (true) {},
-        else => @trap(),
-    }
+    while (true) {}
 }

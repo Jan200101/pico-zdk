@@ -1,4 +1,6 @@
 pub const _errno = private.__errno;
+pub const mode_t = u32;
+pub const PATH_MAX = 1024;
 
 pub const E = enum(c_int) {
     SUCCESS = 0,
@@ -85,6 +87,14 @@ pub const E = enum(c_int) {
     STALE = 81,
     SRCNOTFOUND = 82,
     _,
+};
+
+pub const O = packed struct(u32) {
+    _: u32 = 0,
+};
+
+pub const AT = struct {
+    pub const FDCWD = -2;
 };
 
 const private = struct {

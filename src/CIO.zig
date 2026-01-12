@@ -14,6 +14,11 @@ const c = std.c;
 const fd_t = std.Io.File.Handle;
 const native_os = builtin.os.tag;
 const maxInt = std.math.maxInt;
+const posix = std.posix;
+const assert = std.debug.assert;
+const mem = std.mem;
+
+const root = @import("root");
 
 var stderr_writer: File.Writer = .{
     .io = io(),
@@ -22,6 +27,91 @@ var stderr_writer: File.Writer = .{
     .mode = .streaming,
 };
 
+const _errno = if (@hasDecl(root, "c") and @hasDecl(root.c, "_errno"))
+    root.c._errno
+else
+    c._errno;
+
+const mode_t = if (@hasDecl(root, "c") and @hasDecl(root.c, "mode_t"))
+    root.c.mode_t
+else
+    c.mode_t;
+
+const PATH_MAX = if (@hasDecl(root, "c") and @hasDecl(root.c, "PATH_MAX"))
+    root.c.PATH_MAX
+else
+    c.PATH_MAX;
+
+const E = if (@hasDecl(root, "c") and @hasDecl(root.c, "E"))
+    root.c.E
+else
+    c.E;
+
+const O = if (@hasDecl(root, "c") and @hasDecl(root.c, "O"))
+    root.c.O
+else
+    c.O;
+
+const AT = if (@hasDecl(root, "c") and @hasDecl(root.c, "AT"))
+    root.c.AT
+else
+    c.AT;
+
+fn errno(rc: anytype) E {
+    return if (rc == -1) @enumFromInt(_errno().*) else .SUCCESS;
+}
+
+fn toPosixPath(file_path: []const u8) error{NameTooLong}![PATH_MAX - 1:0]u8 {
+    if (std.debug.runtime_safety) assert(mem.findScalar(u8, file_path, 0) == null);
+    var path_with_null: [PATH_MAX - 1:0]u8 = undefined;
+    // >= rather than > to make room for the null byte
+    if (file_path.len >= PATH_MAX) return error.NameTooLong;
+    @memcpy(path_with_null[0..file_path.len], file_path);
+    path_with_null[file_path.len] = 0;
+    return path_with_null;
+}
+
+pub fn open(file_path: []const u8, flags: O, perm: mode_t) File.OpenError!fd_t {
+    const file_path_c = try toPosixPath(file_path);
+
+    while (true) {
+        const rc = private.open(&file_path_c, flags, perm);
+        switch (errno(rc)) {
+            .SUCCESS => return @intCast(rc),
+            .INTR => continue,
+
+            .FAULT => unreachable,
+            .INVAL => return error.BadPathName,
+            .ACCES => return error.AccessDenied,
+            .FBIG => return error.FileTooBig,
+            .OVERFLOW => return error.FileTooBig,
+            .ISDIR => return error.IsDir,
+            .LOOP => return error.SymLinkLoop,
+            .MFILE => return error.ProcessFdQuotaExceeded,
+            .NAMETOOLONG => return error.NameTooLong,
+            .NFILE => return error.SystemFdQuotaExceeded,
+            .NODEV => return error.NoDevice,
+            .NOENT => return error.FileNotFound,
+            .NOMEM => return error.SystemResources,
+            .NOSPC => return error.NoSpaceLeft,
+            .NOTDIR => return error.NotDir,
+            .PERM => return error.PermissionDenied,
+            .EXIST => return error.PathAlreadyExists,
+            .BUSY => return error.DeviceBusy,
+            else => return error.Unexpected,
+        }
+    }
+}
+
+pub fn close(fd: fd_t) void {
+    const rc = private.close(fd);
+    switch (errno(rc)) {
+        .BADF => unreachable,
+        .INTR => return,
+        else => return,
+    }
+}
+
 fn write(fd: fd_t, bytes: []const u8) File.Writer.Error!usize {
     const max_count = switch (native_os) {
         .linux => 0x7ffff000,
@@ -29,8 +119,8 @@ fn write(fd: fd_t, bytes: []const u8) File.Writer.Error!usize {
         else => maxInt(isize),
     };
     while (true) {
-        const rc = c.write(fd, bytes.ptr, @min(bytes.len, max_count));
-        switch (c.errno(rc)) {
+        const rc = private.write(fd, bytes.ptr, @min(bytes.len, max_count));
+        switch (errno(rc)) {
             .SUCCESS => return @intCast(rc),
             .INTR => continue,
             .INVAL => return error.Unexpected,
@@ -49,6 +139,12 @@ fn write(fd: fd_t, bytes: []const u8) File.Writer.Error!usize {
             else => return error.Unexpected,
         }
     }
+}
+
+pub fn cwd() Dir {
+    return .{
+        .handle = AT.FDCWD,
+    };
 }
 
 pub fn io() Io {
@@ -329,12 +425,18 @@ fn dirCreateFileAtomic(
 
 fn dirOpenFile(
     _: ?*anyopaque,
-    _: Dir,
-    _: []const u8,
-    _: File.OpenFlags,
+    dir: Dir,
+    sub_path: []const u8,
+    flags: File.OpenFlags,
 ) File.OpenError!File {
+    _ = flags;
+
+    if (dir.handle == AT.FDCWD) {
+        const fd = try open(sub_path, .{}, 0);
+        return .{ .handle = fd };
+    }
+
     return error.NoDevice;
-    //@panic("dirOpenFile unimplemented");
 }
 
 fn dirOpenDir(
@@ -461,8 +563,9 @@ fn fileLength(_: ?*anyopaque, _: File) File.LengthError!u64 {
     @panic("fileLength unimplemented");
 }
 
-fn fileClose(_: ?*anyopaque, _: []const File) void {
-    @panic("fileClose unimplemented");
+fn fileClose(_: ?*anyopaque, files: []const File) void {
+    for (files) |file|
+        close(file.handle);
 }
 
 fn fileWriteStreaming(
@@ -788,3 +891,9 @@ fn netLookup(
 ) net.HostName.LookupError!void {
     @panic("netLookup unimplemented");
 }
+
+const private = struct {
+    extern "c" fn open(path: [*:0]const u8, oflag: O, ...) c_int;
+    extern "c" fn close(fd: fd_t) c_int;
+    extern "c" fn write(fd: fd_t, buf: [*]const u8, nbyte: usize) isize;
+};

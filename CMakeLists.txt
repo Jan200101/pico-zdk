@@ -6,6 +6,8 @@ include(pico_sdk_import)
 
 project(pico-zdk C CXX ASM)
 
+# newlib is used to implement IO in C
+set(PICO_CLIB newlib)
 pico_sdk_init()
 
 zig_import_targets(
@@ -17,6 +19,7 @@ zig_import_targets(
 
 add_executable(pico_zdk
 	src/main.c
+    src/newlib_interface.c
 )
 
 target_link_libraries(pico_zdk PUBLIC
