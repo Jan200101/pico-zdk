@@ -11,7 +11,7 @@ pub const debug = @import("debug.zig");
 
 pub const std_options_debug_io = CIO.io();
 pub const std_options_cwd = CIO.cwd;
-pub const panic = std.debug.FullPanic(@import("panic.zig").panic);
+pub const panic = std.debug.FullPanic(debug.panic);
 
 pub fn main() !void {
     lib.test_print();

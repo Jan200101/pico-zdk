@@ -27,35 +27,30 @@ var stderr_writer: File.Writer = .{
     .mode = .streaming,
 };
 
-const _errno = if (@hasDecl(root, "c") and @hasDecl(root.c, "_errno"))
-    root.c._errno
-else
-    c._errno;
+const c_decl = struct {
+    pub fn getType(comptime decl: []const u8) type {
+        return @TypeOf(
+            if (@hasDecl(root, "c") and @hasDecl(root.c, decl))
+                @field(root.c, decl)
+            else
+                @field(c, decl),
+        );
+    }
 
-const mode_t = if (@hasDecl(root, "c") and @hasDecl(root.c, "mode_t"))
-    root.c.mode_t
-else
-    c.mode_t;
+    pub fn getValue(comptime decl: []const u8) getType(decl) {
+        return if (@hasDecl(root, "c") and @hasDecl(root.c, decl))
+            @field(root.c, decl)
+        else
+            @field(c, decl);
+    }
+};
 
-const PATH_MAX = if (@hasDecl(root, "c") and @hasDecl(root.c, "PATH_MAX"))
-    root.c.PATH_MAX
-else
-    c.PATH_MAX;
-
-const E = if (@hasDecl(root, "c") and @hasDecl(root.c, "E"))
-    root.c.E
-else
-    c.E;
-
-const O = if (@hasDecl(root, "c") and @hasDecl(root.c, "O"))
-    root.c.O
-else
-    c.O;
-
-const AT = if (@hasDecl(root, "c") and @hasDecl(root.c, "AT"))
-    root.c.AT
-else
-    c.AT;
+const _errno = c_decl.getValue("_errno");
+const mode_t = c_decl.getValue("mode_t");
+const PATH_MAX = c_decl.getValue("PATH_MAX");
+const E = c_decl.getValue("E");
+const O = c_decl.getValue("O");
+const AT = c_decl.getValue("AT");
 
 fn errno(rc: anytype) E {
     return if (rc == -1) @enumFromInt(_errno().*) else .SUCCESS;
