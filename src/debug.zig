@@ -69,6 +69,8 @@ pub fn panic(msg: []const u8, first_trace_addr: ?usize) noreturn {
         else => {}, // Panicked while printing the recursive panic message.
     }
 
-    // we want to continue execution so we can
+    //@breakpoint();
+
+    // We want execution to continue so we can reprogram over UART
     while (true) {}
 }

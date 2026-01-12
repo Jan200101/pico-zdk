@@ -14,8 +14,8 @@ pub const std_options_cwd = CIO.cwd;
 pub const panic = std.debug.FullPanic(debug.panic);
 
 pub const std_options: std.Options = .{
-    .page_size_min = 1 << 12,
-    .page_size_max = 1 << 12,
+    .page_size_min = 256,
+    .page_size_max = 256,
 };
 
 pub export fn test_print() void {
@@ -34,12 +34,27 @@ pub export fn test_file() void {
     const io = CIO.io();
     const cwd = std.Io.Dir.cwd();
 
-    const f = "NOT_REAL_FILE";
-    const t = cwd.openFile(io, f, .{}) catch {
-        std.debug.print("{s} could not be opened\n", .{f});
-        return;
-    };
-    defer t.close(io);
+    const f = "/TEST_FILE";
 
-    std.debug.print("successfully opened {s}\n", .{f});
+    std.debug.print("trying to delete file\n", .{});
+    cwd.deleteFile(io, f) catch {}; // cannot create a file if it already exists
+
+    std.debug.print("creating file\n", .{});
+    {
+        const t = cwd.createFile(io, f, .{}) catch {
+            std.debug.print("{s} could not be created\n", .{f});
+            return;
+        };
+        defer t.close(io);
+    }
+    std.debug.print("successfully create {s}\n", .{f});
+
+    std.debug.print("deleting file\n", .{});
+    {
+        cwd.deleteFile(io, f) catch {
+            std.debug.print("{s} could not be deleted\n", .{f});
+            return;
+        };
+    }
+    std.debug.print("successfully deleted {s}\n", .{f});
 }

@@ -107,6 +107,29 @@ pub fn close(fd: fd_t) void {
     }
 }
 
+pub fn unlink(file_path: []const u8) Dir.DeleteFileError!void {
+    const file_path_c = try toPosixPath(file_path);
+
+    const rc = private.unlink(&file_path_c);
+    switch (errno(rc)) {
+        .SUCCESS => return,
+        .ACCES => return error.AccessDenied,
+        .PERM => return error.PermissionDenied,
+        .BUSY => return error.FileBusy,
+        .FAULT => unreachable,
+        .INVAL => unreachable,
+        .IO => return error.FileSystem,
+        .ISDIR => return error.IsDir,
+        .LOOP => return error.SymLinkLoop,
+        .NAMETOOLONG => return error.NameTooLong,
+        .NOENT => return error.FileNotFound,
+        .NOTDIR => return error.NotDir,
+        .NOMEM => return error.SystemResources,
+        .ROFS => return error.ReadOnlyFileSystem,
+        else => return error.Unexpected,
+    }
+}
+
 fn write(fd: fd_t, bytes: []const u8) File.Writer.Error!usize {
     const max_count = switch (native_os) {
         .linux => 0x7ffff000,
@@ -402,11 +425,23 @@ fn dirAccess(
 
 fn dirCreateFile(
     _: ?*anyopaque,
-    _: Dir,
-    _: []const u8,
-    _: File.CreateFlags,
+    dir: Dir,
+    sub_path: []const u8,
+    flags: File.CreateFlags,
 ) File.OpenError!File {
-    @panic("dirCreateFile unimplemented");
+    _ = flags;
+
+    if (dir.handle == AT.FDCWD) {
+        const f: O = .{
+            .ACCMODE = .WRONLY,
+            .CREAT = true,
+            .TRUNC = true,
+        };
+        const fd = try open(sub_path, f, 0);
+        return .{ .handle = fd };
+    }
+
+    return error.NoDevice;
 }
 
 fn dirCreateFileAtomic(
@@ -459,8 +494,13 @@ fn dirRealPathFile(_: ?*anyopaque, _: Dir, _: []const u8, _: []u8) Dir.RealPathF
     @panic("dirRealPathFile unimplemented");
 }
 
-fn dirDeleteFile(_: ?*anyopaque, _: Dir, _: []const u8) Dir.DeleteFileError!void {
-    @panic("dirDeleteFile unimplemented");
+fn dirDeleteFile(_: ?*anyopaque, dir: Dir, sub_path: []const u8) Dir.DeleteFileError!void {
+    if (dir.handle == AT.FDCWD) {
+        try unlink(sub_path);
+        return;
+    }
+
+    return error.FileNotFound;
 }
 
 fn dirDeleteDir(_: ?*anyopaque, _: Dir, _: []const u8) Dir.DeleteDirError!void {
@@ -891,4 +931,5 @@ const private = struct {
     extern "c" fn open(path: [*:0]const u8, oflag: O, ...) c_int;
     extern "c" fn close(fd: fd_t) c_int;
     extern "c" fn write(fd: fd_t, buf: [*]const u8, nbyte: usize) isize;
+    extern "c" fn unlink(path: [*:0]const u8) c_int;
 };

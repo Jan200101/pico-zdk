@@ -10,6 +10,8 @@ project(pico-zdk C CXX ASM)
 set(PICO_CLIB newlib)
 pico_sdk_init()
 
+find_package(littlefs)
+
 zig_import_targets(
     PATH "${CMAKE_CURRENT_SOURCE_DIR}"
     COMPILE_TARGET thumb-other-eabi
@@ -24,6 +26,9 @@ add_executable(pico_zdk
 
 target_link_libraries(pico_zdk PUBLIC
 	pico_stdlib
+    hardware_flash
+    hardware_sync
+    littlefs
 	zig::example
 )
 target_link_options(pico_zdk PRIVATE -Wl,--print-memory-usage)

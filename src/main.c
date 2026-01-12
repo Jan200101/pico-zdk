@@ -1,23 +1,33 @@
 #include <stdio.h>
 #include "pico/stdlib.h"
 
-extern void test_print();
-extern void test_panic();
-extern void test_file();
+void test_print();
+void test_panic();
+void test_file();
+
+int mount(void);
 
 int main()
 {
     stdio_init_all();
-
     busy_wait_ms(4000);
 
     printf("Hello World from C!\n");
 	test_print();
 
-    busy_wait_ms(2000);
-    test_file();
+    printf("Doing the mount...");
+    if (!mount())
+    {
+        printf("success!\n");
 
-    busy_wait_ms(2000);
+        printf("Testing File IO\n");
+        test_file();
+    }
+    else
+        printf("fail!\n");
+
+
+    busy_wait_ms(1000);
     test_panic();
 
     printf("Check panic?\n");

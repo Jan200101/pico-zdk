@@ -1,3 +1,4 @@
+const std = @import("std");
 pub const _errno = private.__errno;
 pub const mode_t = u32;
 pub const PATH_MAX = 1024;
@@ -90,7 +91,11 @@ pub const E = enum(c_int) {
 };
 
 pub const O = packed struct(u32) {
-    _: u32 = 0,
+    ACCMODE: std.posix.ACCMODE = .RDONLY,
+    _2: u7 = 0,
+    CREAT: bool = false,
+    TRUNC: bool = false,
+    _7: u21 = 0,
 };
 
 pub const AT = struct {
