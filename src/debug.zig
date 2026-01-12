@@ -42,7 +42,7 @@ pub fn panic(msg: []const u8, first_trace_addr: ?usize) noreturn {
             defer debug.unlockStderr();
             const writer = stderr.writer;
 
-            writer.writeAll("min panic: ") catch break :trace;
+            writer.writeAll("panic: ") catch break :trace;
             writer.print("{s}\n", .{msg}) catch break :trace;
 
             if (@errorReturnTrace()) |t| if (t.index > 0) {

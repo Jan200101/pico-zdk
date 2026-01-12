@@ -15,6 +15,6 @@ pub const panic = std.debug.FullPanic(debug.panic);
 
 pub fn main() !void {
     lib.test_print();
-    lib.test_file();
+    lib.test_file("TEST_FILE");
     lib.test_panic();
 }

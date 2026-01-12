@@ -13,82 +13,71 @@
 #define STDIO_HANDLE_STDOUT 1
 #define STDIO_HANDLE_STDERR 2
 
+#define HEAP_SIZE      (128 * 1024)
+#define BLOCK_SIZE      4096
+#define READ_SIZE       16
+#define PROG_SIZE       16
+#define CACHE_SIZE      64
+
 #define MAX_FDS 32
-#define FS_SIZE (256 * 128)
 
 #define START_FD STDIO_HANDLE_STDERR+1
 static lfs_file_t* fd_list[MAX_FDS] = {NULL};
 
-static int pico_hal_read(const struct lfs_config *c, lfs_block_t block, lfs_off_t off, void *buffer, lfs_size_t size);
-static int pico_hal_prog(const struct lfs_config *c, lfs_block_t block, lfs_off_t off, const void* buffer, lfs_size_t size);
-static int pico_hal_erase(const struct lfs_config *c, lfs_block_t block);
+static uint8_t *heap_flash = NULL;
 
-static lfs_t lfs;
-static struct lfs_config cfg = {
-    // block device operations
-    .read = pico_hal_read,
-    .prog = pico_hal_prog,
-    .erase = pico_hal_erase,
-#if LIB_PICO_MULTICORE
-    .lock = pico_lock,
-    .unlock = pico_unlock,
-#endif
-    // block device configuration
-    .read_size = 1,
-    .prog_size = FLASH_PAGE_SIZE,
-    .block_size = FLASH_SECTOR_SIZE,
-    .block_count = FS_SIZE / FLASH_SECTOR_SIZE,
-    .cache_size = FLASH_SECTOR_SIZE / 4,
-    .lookahead_size = 32,
-    .block_cycles = 500
-};
-
-int mount(void) {
-    printf("formatting\n");
-    lfs_format(&lfs, &cfg);
-    printf("mounting\n");
-    int err = lfs_mount(&lfs, &cfg);
-    if (err) {
-        printf("mount error occured %i\n", err);
-        return -1;
-    }
-
-    printf("mount done\n");
-
+static int heap_read(const struct lfs_config *c, lfs_block_t block, lfs_off_t offset, void *buffer, lfs_size_t size)
+{
+    uint8_t *addr = &heap_flash[block * c->block_size + offset];
+    memcpy(buffer, addr, size);
     return 0;
 }
 
-const char* FS_BASE = (char*)(PICO_FLASH_SIZE_BYTES - FS_SIZE);
-
-static int pico_hal_read(const struct lfs_config *c, lfs_block_t block, lfs_off_t off, void *buffer, lfs_size_t size)
-{
-    assert(block < c->block_count);
-    assert(off + size <= c->block_size);
-    // read flash via XIP mapped space
-    memcpy(buffer, FS_BASE + XIP_NOCACHE_NOALLOC_BASE + (block * c->block_size) + off, size);
-    return LFS_ERR_OK;
+static int heap_prog(const struct lfs_config *c, lfs_block_t block, lfs_off_t offset, const void *buffer, lfs_size_t size) {
+    uint8_t *addr = &heap_flash[block * c->block_size + offset];
+    memcpy(addr, buffer, size);
+    return 0;
 }
 
-static int pico_hal_prog(const struct lfs_config *c, lfs_block_t block, lfs_off_t off, const void* buffer, lfs_size_t size)
+static int heap_erase(const struct lfs_config *c, lfs_block_t block)
 {
-    assert(block < c->block_count);
-    // program with SDK
-    uint32_t p = (uint32_t)FS_BASE + (block * c->block_size) + off;
-    uint32_t ints = save_and_disable_interrupts();
-    flash_range_program(p, buffer, size);
-    restore_interrupts(ints);
-    return LFS_ERR_OK;
+    uint8_t *addr = &heap_flash[block * c->block_size];
+    memset(addr, 0xFF, c->block_size);
+    return 0;
 }
 
-static int pico_hal_erase(const struct lfs_config *c, lfs_block_t block)
+static int heap_sync(const struct lfs_config *c)
 {
-    assert(block < c->block_count);
-    // erase with SDK
-    uint32_t p = (uint32_t)FS_BASE + block * c->block_size;
-    uint32_t ints = save_and_disable_interrupts();
-    flash_range_erase(p, c->block_size);
-    restore_interrupts(ints);
-    return LFS_ERR_OK;
+    (void)c;
+    return 0;
+}
+
+static lfs_t lfs;
+static const struct lfs_config cfg = {
+    .context        = &heap_flash,
+    .read           = heap_read,
+    .prog           = heap_prog,
+    .erase          = heap_erase,
+    .sync           = heap_sync,
+    .read_size      = READ_SIZE,
+    .prog_size      = PROG_SIZE,
+    .block_size     = BLOCK_SIZE,
+    .block_count    = (HEAP_SIZE / BLOCK_SIZE),
+    .cache_size     = CACHE_SIZE,
+    .lookahead_size = 16,
+    .block_cycles   = 500,
+};
+
+int mount(void) {
+    heap_flash = malloc(HEAP_SIZE);
+    if (!heap_flash) return -1;
+    memset(heap_flash, 0xFF, HEAP_SIZE);
+
+    int err = lfs_format(&lfs, &cfg);
+    if (err != 0) return err;
+
+    err = lfs_mount(&lfs, &cfg);
+    return err;
 }
 
 static int _flags_remap(int flags) {
@@ -154,10 +143,6 @@ int _write(int handle, char *buffer, int length) {
 }
 
 int _open(const char *path, int oflags, ...) {
-    printf("open(%s, %i)\n", path, oflags);
-    printf("WRONLY %i %i\n", oflags & O_WRONLY, O_WRONLY);
-    printf("CREAT %i %i\n", oflags & O_CREAT, O_CREAT);
-    printf("TRUNC %i %i\n", oflags & O_TRUNC, O_TRUNC);
     int lfs_flags = _flags_remap(oflags);
 
     for (int fd = START_FD; fd < MAX_FDS; ++fd)
@@ -165,27 +150,19 @@ int _open(const char *path, int oflags, ...) {
         // if valid slot
         if (fd_list[fd] == NULL)
         {
-            printf("fd %i is free\n", fd);
-
             lfs_file_t* file = lfs_malloc(sizeof(lfs_file_t));
 
             int err = lfs_file_open(&lfs, file, path, lfs_flags);
             if (err)
             {
-                printf("err: %i\n", err);
                 lfs_free(file);
-
                 errno = EACCES;
                 return -1;
             }
 
-            printf("fd %i assigned\n", fd);
-
             fd_list[fd] = file;
             return fd;
         }
-
-        printf("fd %i not free\n", fd);
     }
 
 	errno = ENOENT;
@@ -200,30 +177,20 @@ int _close(int fd) {
         return -1;
     }
 
-    printf("closing fd %i\n", fd);
-
-    return 0;
-
     int ret = lfs_file_close(&lfs, file);
-    printf("stuck?\n");
 
     fd_list[fd] = NULL;
     lfs_free(file);
     if (ret < 0)
     {
-        printf("error _close\n");
         errno = EIO;
         return -1;
     }
-
-    printf("exit _close\n");
 
     return 0;
 }
 
 int _unlink(const char *path) {
-    return 0;
-
     int ret = lfs_remove(&lfs, path);
     if (ret < 0)
     {

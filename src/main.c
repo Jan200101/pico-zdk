@@ -3,7 +3,7 @@
 
 void test_print();
 void test_panic();
-void test_file();
+void test_file(const char*);
 
 int mount(void);
 
@@ -21,7 +21,7 @@ int main()
         printf("success!\n");
 
         printf("Testing File IO\n");
-        test_file();
+        test_file("/TEST_FILE");
     }
     else
         printf("fail!\n");
