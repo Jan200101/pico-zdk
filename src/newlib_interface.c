@@ -93,7 +93,7 @@ static int _flags_remap(int flags) {
 int _read(int handle, char *buffer, int length) {
 #if LIB_PICO_STDIO
     // Some systems implement STDIO, OUT and ERR as the same fd
-    if (handle >= STDIO_HANDLE_STDIN || handle <= STDIO_HANDLE_STDERR)
+    if (handle >= STDIO_HANDLE_STDIN && handle <= STDIO_HANDLE_STDERR)
     {
         return stdio_get_until(buffer, length, at_the_end_of_time);
     }
@@ -118,7 +118,7 @@ int _read(int handle, char *buffer, int length) {
 
 int _write(int handle, char *buffer, int length) {
 #if LIB_PICO_STDIO
-    if (handle >= STDIO_HANDLE_STDIN || handle <= STDIO_HANDLE_STDERR)
+    if (handle >= STDIO_HANDLE_STDIN && handle <= STDIO_HANDLE_STDERR)
     {
         stdio_put_string(buffer, length, false, true);
         return length;
@@ -132,7 +132,7 @@ int _write(int handle, char *buffer, int length) {
         return -1;
     }
 
-    lfs_ssize_t ret = lfs_file_read(&lfs, file, buffer, length);
+    lfs_ssize_t ret = lfs_file_write(&lfs, file, buffer, length);
     if (ret < 0)
     {
         errno = EIO;
