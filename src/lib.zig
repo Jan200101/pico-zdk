@@ -41,8 +41,8 @@ pub export fn test_file(path: [*:0]const u8) void {
 
     std.debug.print("opening file prematurely\n", .{});
     blk: {
-        const t = cwd.openFile(io, f, .{}) catch {
-            std.debug.print("{s} could not be opened\n\n", .{f});
+        const t = cwd.openFile(io, f, .{}) catch |err| {
+            std.debug.print("{s} could not be opened: {t}\n\n", .{ f, err });
             break :blk;
         };
         defer t.close(io);
@@ -52,18 +52,40 @@ pub export fn test_file(path: [*:0]const u8) void {
 
     std.debug.print("creating file\n", .{});
     {
-        const t = cwd.createFile(io, f, .{}) catch {
-            std.debug.print("{s} could not be created\n\n", .{f});
+        const t = cwd.createFile(io, f, .{ .read = true }) catch |err| {
+            std.debug.print("{s} could not be created: {t}\n\n", .{ f, err });
             return;
         };
         defer t.close(io);
+        std.debug.print("successfully create {s}\n", .{f});
+
+        const out_data = "file test data";
+        t.writeStreamingAll(io, out_data) catch |err| {
+            std.debug.print("{s} could not be written to: {t}\n\n", .{ f, err });
+            return;
+        };
+        std.debug.print("successfully written \"{s}\" to {s}\n", .{ out_data, f });
+
+        // we gotta seek back manually
+        // you should really use File.Reader which does this for you
+        // however I do not care
+        io.vtable.fileSeekTo(io.userdata, t, 0) catch |err| {
+            std.debug.print("{s} could not seek back: {t}\n\n", .{ f, err });
+            return;
+        };
+
+        var buffer: [4]u8 = @splat('A');
+        const read = t.readStreaming(io, &.{&buffer}) catch |err| {
+            std.debug.print("{s} could not be read from: {t}\n\n", .{ f, err });
+            return;
+        };
+        std.debug.print("successfully read {} bytes from {s}: \"{s}\"\n\n", .{ read, f, buffer[0..read] });
     }
-    std.debug.print("successfully create {s}\n\n", .{f});
 
     std.debug.print("deleting file\n", .{});
     {
-        cwd.deleteFile(io, f) catch {
-            std.debug.print("{s} could not be deleted\n", .{f});
+        cwd.deleteFile(io, f) catch |err| {
+            std.debug.print("{s} could not be deleted: {t}\n", .{ f, err });
             return;
         };
     }
@@ -71,8 +93,8 @@ pub export fn test_file(path: [*:0]const u8) void {
 
     std.debug.print("deleting file again\n", .{});
     {
-        cwd.deleteFile(io, f) catch {
-            std.debug.print("{s} could not be deleted\n\n", .{f});
+        cwd.deleteFile(io, f) catch |err| {
+            std.debug.print("{s} could not be deleted: {t}\n\n", .{ f, err });
             return;
         };
     }

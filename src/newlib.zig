@@ -92,7 +92,9 @@ pub const E = enum(c_int) {
 
 pub const O = packed struct(u32) {
     ACCMODE: std.posix.ACCMODE = .RDONLY,
-    _2: u7 = 0,
+    _2: u5 = 0,
+    EXCL: bool = false,
+    _4: u1 = 0,
     CREAT: bool = false,
     TRUNC: bool = false,
     _7: u21 = 0,
@@ -100,6 +102,12 @@ pub const O = packed struct(u32) {
 
 pub const AT = struct {
     pub const FDCWD = -2;
+};
+
+pub const SEEK = struct {
+    pub const SET = 0;
+    pub const CUR = 1;
+    pub const END = 2;
 };
 
 const private = struct {

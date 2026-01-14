@@ -200,3 +200,41 @@ int _unlink(const char *path) {
 
     return 0;
 }
+
+off_t _lseek(int fd, off_t pos, int whence) {
+    lfs_file_t* file = fd_list[fd];
+    if (file == NULL)
+    {
+        errno = EBADF;
+        return -1;
+    }
+
+    int lfs_whence = -1;
+    switch (whence)
+    {
+        case SEEK_SET:
+            lfs_whence = LFS_SEEK_SET;
+            break;
+
+        case SEEK_CUR:
+            lfs_whence = LFS_SEEK_CUR;
+            break;
+
+        case SEEK_END:
+            lfs_whence = LFS_SEEK_END;
+            break;
+
+        default:
+            errno = EINVAL;
+            return -1;
+    }
+
+    int ret = lfs_file_seek(&lfs, file, pos, whence);
+    if (ret < 0)
+    {
+        errno = EIO;
+        return -1;
+    }
+
+    return 0;
+}
