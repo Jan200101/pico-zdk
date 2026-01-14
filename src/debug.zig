@@ -42,8 +42,7 @@ pub fn panic(msg: []const u8, first_trace_addr: ?usize) noreturn {
             defer debug.unlockStderr();
             const writer = stderr.writer;
 
-            writer.writeAll("panic: ") catch break :trace;
-            writer.print("{s}\n", .{msg}) catch break :trace;
+            writer.print("panic: {s}\n", .{msg}) catch break :trace;
 
             if (@errorReturnTrace()) |t| if (t.index > 0) {
                 writer.writeAll("error return context:\n") catch break :trace;
