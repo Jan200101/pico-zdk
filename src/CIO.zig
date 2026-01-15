@@ -54,151 +54,6 @@ const O = c_decl.getValue("O");
 const AT = c_decl.getValue("AT");
 const SEEK = c_decl.getValue("SEEK");
 
-fn errno(rc: anytype) E {
-    return if (rc == -1) @enumFromInt(_errno().*) else .SUCCESS;
-}
-
-fn toPosixPath(file_path: []const u8) error{NameTooLong}![PATH_MAX - 1:0]u8 {
-    if (std.debug.runtime_safety) assert(mem.findScalar(u8, file_path, 0) == null);
-    var path_with_null: [PATH_MAX - 1:0]u8 = undefined;
-    // >= rather than > to make room for the null byte
-    if (file_path.len >= PATH_MAX) return error.NameTooLong;
-    @memcpy(path_with_null[0..file_path.len], file_path);
-    path_with_null[file_path.len] = 0;
-    return path_with_null;
-}
-
-fn open(file_path: []const u8, flags: O, perm: mode_t) File.OpenError!fd_t {
-    const file_path_c = try toPosixPath(file_path);
-
-    while (true) {
-        const rc = private.open(&file_path_c, flags, perm);
-        switch (errno(rc)) {
-            .SUCCESS => return @intCast(rc),
-            .INTR => continue,
-
-            .FAULT => unreachable,
-            .INVAL => return error.BadPathName,
-            .ACCES => return error.AccessDenied,
-            .FBIG => return error.FileTooBig,
-            .OVERFLOW => return error.FileTooBig,
-            .ISDIR => return error.IsDir,
-            .LOOP => return error.SymLinkLoop,
-            .MFILE => return error.ProcessFdQuotaExceeded,
-            .NAMETOOLONG => return error.NameTooLong,
-            .NFILE => return error.SystemFdQuotaExceeded,
-            .NODEV => return error.NoDevice,
-            .NOENT => return error.FileNotFound,
-            .NOMEM => return error.SystemResources,
-            .NOSPC => return error.NoSpaceLeft,
-            .NOTDIR => return error.NotDir,
-            .PERM => return error.PermissionDenied,
-            .EXIST => return error.PathAlreadyExists,
-            .BUSY => return error.DeviceBusy,
-            else => return error.Unexpected,
-        }
-    }
-}
-
-fn close(fd: fd_t) void {
-    const rc = private.close(fd);
-    switch (errno(rc)) {
-        .BADF => unreachable,
-        .INTR => return,
-        else => return,
-    }
-}
-
-fn read(fd: fd_t, buf: []u8) File.Reader.Error!usize {
-    const max_count = switch (native_os) {
-        .linux => 0x7ffff000,
-        .macos, .ios, .watchos, .tvos, .visionos => maxInt(i32),
-        else => maxInt(isize),
-    };
-    while (true) {
-        const rc = private.read(fd, buf.ptr, @min(buf.len, max_count));
-        switch (errno(rc)) {
-            .SUCCESS => return @intCast(rc),
-            .INTR => continue,
-            .INVAL => unreachable,
-            .FAULT => unreachable,
-            .AGAIN => return error.WouldBlock,
-            .CANCELED => return error.Canceled,
-            .BADF => return error.NotOpenForReading, // Can be a race condition.
-            .IO => return error.InputOutput,
-            .ISDIR => return error.IsDir,
-            .NOBUFS => return error.SystemResources,
-            .NOMEM => return error.SystemResources,
-            .CONNRESET => return error.ConnectionResetByPeer,
-            else => return error.Unexpected,
-        }
-    }
-}
-
-fn write(fd: fd_t, bytes: []const u8) File.Writer.Error!usize {
-    const max_count = switch (native_os) {
-        .linux => 0x7ffff000,
-        .macos, .ios, .watchos, .tvos, .visionos => maxInt(i32),
-        else => maxInt(isize),
-    };
-    while (true) {
-        const rc = private.write(fd, bytes.ptr, @min(bytes.len, max_count));
-        switch (errno(rc)) {
-            .SUCCESS => return @intCast(rc),
-            .INTR => continue,
-            .INVAL => return error.Unexpected,
-            .FAULT => return error.Unexpected,
-            .AGAIN => return error.WouldBlock,
-            .BADF => return error.NotOpenForWriting, // Can be a race condition.
-            .DESTADDRREQ => return error.Unexpected, // `connect` was never called.
-            .DQUOT => return error.DiskQuota,
-            .FBIG => return error.FileTooBig,
-            .IO => return error.InputOutput,
-            .NOSPC => return error.NoSpaceLeft,
-            .PERM => return error.PermissionDenied,
-            .PIPE => return error.BrokenPipe,
-            .CONNRESET => return error.Unexpected, // Not a socket handle.
-            .BUSY => return error.DeviceBusy,
-            else => return error.Unexpected,
-        }
-    }
-}
-
-fn unlink(file_path: []const u8) Dir.DeleteFileError!void {
-    const file_path_c = try toPosixPath(file_path);
-
-    const rc = private.unlink(&file_path_c);
-    switch (errno(rc)) {
-        .SUCCESS => return,
-        .ACCES => return error.AccessDenied,
-        .PERM => return error.PermissionDenied,
-        .BUSY => return error.FileBusy,
-        .FAULT => unreachable,
-        .INVAL => unreachable,
-        .IO => return error.FileSystem,
-        .ISDIR => return error.IsDir,
-        .LOOP => return error.SymLinkLoop,
-        .NAMETOOLONG => return error.NameTooLong,
-        .NOENT => return error.FileNotFound,
-        .NOTDIR => return error.NotDir,
-        .NOMEM => return error.SystemResources,
-        .ROFS => return error.ReadOnlyFileSystem,
-        else => return error.Unexpected,
-    }
-}
-
-fn lseek(fd: fd_t, offset: off_t, whence: c_int) File.SeekError!void {
-    switch (errno(private.lseek(fd, @bitCast(offset), whence))) {
-        .SUCCESS => return,
-        .BADF => unreachable, // always a race condition
-        .INVAL => return error.Unseekable,
-        .OVERFLOW => return error.Unseekable,
-        .SPIPE => return error.Unseekable,
-        .NXIO => return error.Unseekable,
-        else => return error.Unexpected,
-    }
-}
-
 pub fn cwd() Dir {
     return .{
         .handle = AT.FDCWD,
@@ -477,7 +332,7 @@ fn dirCreateFile(
     };
 
     if (dir.handle == AT.FDCWD) {
-        const fd = try open(sub_path, f, 0);
+        const fd = try system.open(sub_path, f, 0);
         return .{ .handle = fd };
     }
 
@@ -508,7 +363,7 @@ fn dirOpenFile(
     };
 
     if (dir.handle == AT.FDCWD) {
-        const fd = try open(sub_path, f, 0);
+        const fd = try system.open(sub_path, f, 0);
         return .{ .handle = fd };
     }
 
@@ -542,7 +397,7 @@ fn dirRealPathFile(_: ?*anyopaque, _: Dir, _: []const u8, _: []u8) Dir.RealPathF
 
 fn dirDeleteFile(_: ?*anyopaque, dir: Dir, sub_path: []const u8) Dir.DeleteFileError!void {
     if (dir.handle == AT.FDCWD) {
-        try unlink(sub_path);
+        try system.unlink(sub_path);
         return;
     }
 
@@ -646,7 +501,7 @@ fn fileLength(_: ?*anyopaque, _: File) File.LengthError!u64 {
 
 fn fileClose(_: ?*anyopaque, files: []const File) void {
     for (files) |file|
-        close(file.handle);
+        system.close(file.handle);
 }
 
 fn fileWriteStreaming(
@@ -657,17 +512,17 @@ fn fileWriteStreaming(
     splat: usize,
 ) File.Writer.Error!usize {
     if (header.len != 0) {
-        return try write(file.handle, header);
+        return try system.write(file.handle, header);
     }
 
     for (data[0 .. data.len - 1]) |buf| {
         if (buf.len == 0) continue;
-        return try write(file.handle, buf);
+        return try system.write(file.handle, buf);
     }
 
     const pattern = data[data.len - 1];
     if (pattern.len == 0 or splat == 0) return 0;
-    return try write(file.handle, pattern);
+    return try system.write(file.handle, pattern);
 }
 
 fn fileWritePositional(
@@ -707,7 +562,7 @@ fn fileWriteFilePositional(
 fn fileReadStreaming(_: ?*anyopaque, file: File, data: []const []u8) File.Reader.Error!usize {
     for (data) |buf| {
         if (buf.len == 0) continue;
-        return try read(file.handle, buf);
+        return try system.read(file.handle, buf);
     }
 
     return 0;
@@ -719,11 +574,11 @@ fn fileReadPositional(_: ?*anyopaque, _: File, _: []const []u8, _: u64) File.Rea
 }
 
 fn fileSeekBy(_: ?*anyopaque, file: File, offset: i64) File.SeekError!void {
-    try lseek(file.handle, @intCast(offset), SEEK.CUR);
+    try system.lseek(file.handle, @intCast(offset), SEEK.CUR);
 }
 
 fn fileSeekTo(_: ?*anyopaque, file: File, pos: u64) File.SeekError!void {
-    try lseek(file.handle, @intCast(pos), SEEK.SET);
+    try system.lseek(file.handle, @intCast(pos), SEEK.SET);
 }
 
 fn fileSync(_: ?*anyopaque, _: File) File.SyncError!void {
@@ -980,11 +835,158 @@ fn netLookup(
     @panic("netLookup unimplemented");
 }
 
-const private = struct {
-    extern "c" fn open(path: [*:0]const u8, oflag: O, ...) c_int;
-    extern "c" fn close(fd: fd_t) c_int;
-    extern "c" fn read(fd: fd_t, buf: [*]u8, nbyte: usize) isize;
-    extern "c" fn write(fd: fd_t, buf: [*]const u8, nbyte: usize) isize;
-    extern "c" fn unlink(path: [*:0]const u8) c_int;
-    extern "c" fn lseek(fd: fd_t, offset: off_t, whence: c_int) off_t;
+const system = struct {
+    fn toPosixPath(file_path: []const u8) error{NameTooLong}![PATH_MAX - 1:0]u8 {
+        if (std.debug.runtime_safety) assert(mem.findScalar(u8, file_path, 0) == null);
+        var path_with_null: [PATH_MAX - 1:0]u8 = undefined;
+        // >= rather than > to make room for the null byte
+        if (file_path.len >= PATH_MAX) return error.NameTooLong;
+        @memcpy(path_with_null[0..file_path.len], file_path);
+        path_with_null[file_path.len] = 0;
+        return path_with_null;
+    }
+
+    fn errno(rc: anytype) E {
+        return if (rc == -1) @enumFromInt(_errno().*) else .SUCCESS;
+    }
+
+    pub fn open(file_path: []const u8, flags: O, perm: mode_t) File.OpenError!fd_t {
+        const file_path_c = try toPosixPath(file_path);
+
+        while (true) {
+            const rc = private.open(&file_path_c, flags, perm);
+            switch (errno(rc)) {
+                .SUCCESS => return @intCast(rc),
+                .INTR => continue,
+
+                .FAULT => unreachable,
+                .INVAL => return error.BadPathName,
+                .ACCES => return error.AccessDenied,
+                .FBIG => return error.FileTooBig,
+                .OVERFLOW => return error.FileTooBig,
+                .ISDIR => return error.IsDir,
+                .LOOP => return error.SymLinkLoop,
+                .MFILE => return error.ProcessFdQuotaExceeded,
+                .NAMETOOLONG => return error.NameTooLong,
+                .NFILE => return error.SystemFdQuotaExceeded,
+                .NODEV => return error.NoDevice,
+                .NOENT => return error.FileNotFound,
+                .NOMEM => return error.SystemResources,
+                .NOSPC => return error.NoSpaceLeft,
+                .NOTDIR => return error.NotDir,
+                .PERM => return error.PermissionDenied,
+                .EXIST => return error.PathAlreadyExists,
+                .BUSY => return error.DeviceBusy,
+                else => return error.Unexpected,
+            }
+        }
+    }
+
+    pub fn close(fd: fd_t) void {
+        const rc = private.close(fd);
+        switch (errno(rc)) {
+            .BADF => unreachable,
+            .INTR => return,
+            else => return,
+        }
+    }
+
+    pub fn read(fd: fd_t, buf: []u8) File.Reader.Error!usize {
+        const max_count = switch (native_os) {
+            .linux => 0x7ffff000,
+            .macos, .ios, .watchos, .tvos, .visionos => maxInt(i32),
+            else => maxInt(isize),
+        };
+        while (true) {
+            const rc = private.read(fd, buf.ptr, @min(buf.len, max_count));
+            switch (errno(rc)) {
+                .SUCCESS => return @intCast(rc),
+                .INTR => continue,
+                .INVAL => unreachable,
+                .FAULT => unreachable,
+                .AGAIN => return error.WouldBlock,
+                .CANCELED => return error.Canceled,
+                .BADF => return error.NotOpenForReading, // Can be a race condition.
+                .IO => return error.InputOutput,
+                .ISDIR => return error.IsDir,
+                .NOBUFS => return error.SystemResources,
+                .NOMEM => return error.SystemResources,
+                .CONNRESET => return error.ConnectionResetByPeer,
+                else => return error.Unexpected,
+            }
+        }
+    }
+
+    pub fn write(fd: fd_t, bytes: []const u8) File.Writer.Error!usize {
+        const max_count = switch (native_os) {
+            .linux => 0x7ffff000,
+            .macos, .ios, .watchos, .tvos, .visionos => maxInt(i32),
+            else => maxInt(isize),
+        };
+        while (true) {
+            const rc = private.write(fd, bytes.ptr, @min(bytes.len, max_count));
+            switch (errno(rc)) {
+                .SUCCESS => return @intCast(rc),
+                .INTR => continue,
+                .INVAL => return error.Unexpected,
+                .FAULT => return error.Unexpected,
+                .AGAIN => return error.WouldBlock,
+                .BADF => return error.NotOpenForWriting, // Can be a race condition.
+                .DESTADDRREQ => return error.Unexpected, // `connect` was never called.
+                .DQUOT => return error.DiskQuota,
+                .FBIG => return error.FileTooBig,
+                .IO => return error.InputOutput,
+                .NOSPC => return error.NoSpaceLeft,
+                .PERM => return error.PermissionDenied,
+                .PIPE => return error.BrokenPipe,
+                .CONNRESET => return error.Unexpected, // Not a socket handle.
+                .BUSY => return error.DeviceBusy,
+                else => return error.Unexpected,
+            }
+        }
+    }
+
+    pub fn unlink(file_path: []const u8) Dir.DeleteFileError!void {
+        const file_path_c = try toPosixPath(file_path);
+
+        const rc = private.unlink(&file_path_c);
+        switch (errno(rc)) {
+            .SUCCESS => return,
+            .ACCES => return error.AccessDenied,
+            .PERM => return error.PermissionDenied,
+            .BUSY => return error.FileBusy,
+            .FAULT => unreachable,
+            .INVAL => unreachable,
+            .IO => return error.FileSystem,
+            .ISDIR => return error.IsDir,
+            .LOOP => return error.SymLinkLoop,
+            .NAMETOOLONG => return error.NameTooLong,
+            .NOENT => return error.FileNotFound,
+            .NOTDIR => return error.NotDir,
+            .NOMEM => return error.SystemResources,
+            .ROFS => return error.ReadOnlyFileSystem,
+            else => return error.Unexpected,
+        }
+    }
+
+    pub fn lseek(fd: fd_t, offset: off_t, whence: c_int) File.SeekError!void {
+        switch (errno(private.lseek(fd, @bitCast(offset), whence))) {
+            .SUCCESS => return,
+            .BADF => unreachable, // always a race condition
+            .INVAL => return error.Unseekable,
+            .OVERFLOW => return error.Unseekable,
+            .SPIPE => return error.Unseekable,
+            .NXIO => return error.Unseekable,
+            else => return error.Unexpected,
+        }
+    }
+
+    const private = struct {
+        extern "c" fn open(path: [*:0]const u8, oflag: O, ...) c_int;
+        extern "c" fn close(fd: fd_t) c_int;
+        extern "c" fn read(fd: fd_t, buf: [*]u8, nbyte: usize) isize;
+        extern "c" fn write(fd: fd_t, buf: [*]const u8, nbyte: usize) isize;
+        extern "c" fn unlink(path: [*:0]const u8) c_int;
+        extern "c" fn lseek(fd: fd_t, offset: off_t, whence: c_int) off_t;
+    };
 };
