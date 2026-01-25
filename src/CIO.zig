@@ -17,6 +17,7 @@ const maxInt = std.math.maxInt;
 const posix = std.posix;
 const assert = std.debug.assert;
 const mem = std.mem;
+const socket_t = posix.socket_t;
 
 const root = @import("root");
 
@@ -53,6 +54,13 @@ const E = c_decl.getValue("E");
 const O = c_decl.getValue("O");
 const AT = c_decl.getValue("AT");
 const SEEK = c_decl.getValue("SEEK");
+const sockaddr = c_decl.getValue("sockaddr");
+const sa_family_t = c_decl.getValue("sa_family_t");
+const AF = c_decl.getValue("AF");
+const SOCK = c_decl.getValue("SOCK");
+const socklen_t = c_decl.getValue("socklen_t");
+const SOL = c_decl.getValue("SOL");
+const SO = c_decl.getValue("SO");
 
 pub fn cwd() Dir {
     return .{
@@ -722,10 +730,35 @@ fn randomSecure(_: ?*anyopaque, _: []u8) Io.RandomSecureError!void {
 
 fn netListenIp(
     _: ?*anyopaque,
-    _: IpAddress,
-    _: IpAddress.ListenOptions,
+    address: IpAddress,
+    options: IpAddress.ListenOptions,
 ) IpAddress.ListenError!net.Server {
-    @panic("netListenIp unimplemented");
+    const family = posixAddressFamily(&address);
+    const mode = posixSocketMode(options.mode);
+    const protocol = posixProtocol(options.protocol);
+
+    const flags: u32 = mode;
+    const socket_fd = try system.socket(family, flags, protocol);
+    errdefer system.close(socket_fd);
+
+    if (options.reuse_address) {
+        try system.setsockopt(socket_fd, SOL.SOCKET, SO.REUSEADDR, 1);
+        if (@hasDecl(SO, "REUSEPORT"))
+            try system.setsockopt(socket_fd, SOL.SOCKET, SO.REUSEPORT, 1);
+    }
+
+    var storage: PosixAddress = undefined;
+    const addr_len = addressToPosix(&address, &storage);
+    try system.bind(socket_fd, &storage.any, addr_len);
+
+    try system.listen(socket_fd, 128);
+
+    return .{
+        .socket = .{
+            .handle = socket_fd,
+            .address = addressFromPosix(&storage),
+        },
+    };
 }
 
 fn netListenUnix(
@@ -733,56 +766,114 @@ fn netListenUnix(
     _: *const net.UnixAddress,
     _: net.UnixAddress.ListenOptions,
 ) net.UnixAddress.ListenError!net.Socket.Handle {
-    @panic("netListenUnix unimplemented");
+    return error.NetworkDown;
 }
 
-fn netAccept(_: ?*anyopaque, _: net.Socket.Handle) net.Server.AcceptError!net.Stream {
-    @panic("netAccept unimplemented");
+fn netAccept(_: ?*anyopaque, listen_fd: net.Socket.Handle) net.Server.AcceptError!net.Stream {
+    var storage: PosixAddress = undefined;
+    var addr_len: posix.socklen_t = @sizeOf(PosixAddress);
+
+    const req_fd = try system.accept(listen_fd, &storage.any, &addr_len);
+
+    return .{
+        .socket = .{
+            .handle = req_fd,
+            .address = addressFromPosix(&storage),
+        },
+    };
 }
 
 fn netBindIp(
     _: ?*anyopaque,
-    _: *const IpAddress,
-    _: IpAddress.BindOptions,
+    address: *const IpAddress,
+    options: IpAddress.BindOptions,
 ) IpAddress.BindError!net.Socket {
-    @panic("netBindIp unimplemented");
+    const family = posixAddressFamily(address);
+    const mode = posixSocketMode(options.mode);
+    const protocol = posixProtocol(options.protocol);
+
+    const flags: u32 = mode;
+    const socket_fd = try system.socket(family, flags, protocol);
+    errdefer system.close(socket_fd);
+
+    var storage: PosixAddress = undefined;
+    const addr_len = addressToPosix(address, &storage);
+    try system.bind(socket_fd, &storage.any, addr_len);
+
+    return .{
+        .handle = socket_fd,
+        .address = addressFromPosix(&storage),
+    };
 }
 
 fn netConnectIp(
     _: ?*anyopaque,
-    _: *const IpAddress,
-    _: IpAddress.ConnectOptions,
+    address: *const IpAddress,
+    options: IpAddress.ConnectOptions,
 ) IpAddress.ConnectError!net.Stream {
-    @panic("netConnectIp unimplemented");
+    const family = posixAddressFamily(address);
+    const mode = posixSocketMode(options.mode);
+    const protocol = posixProtocol(options.protocol);
+
+    const flags: u32 = mode;
+    const socket_fd = try system.socket(family, flags, protocol);
+    errdefer system.close(socket_fd);
+
+    var storage: PosixAddress = undefined;
+    const addr_len = addressToPosix(address, &storage);
+    try system.connect(socket_fd, &storage.any, addr_len);
+
+    return .{
+        .socket = .{
+            .handle = socket_fd,
+            .address = addressFromPosix(&storage),
+        },
+    };
 }
 
 fn netConnectUnix(
     _: ?*anyopaque,
     _: *const net.UnixAddress,
 ) net.UnixAddress.ConnectError!net.Socket.Handle {
-    @panic("netConnectUnix unimplemented");
+    return error.NetworkDown;
 }
 
-fn netClose(_: ?*anyopaque, _: []const net.Socket.Handle) void {
-    @panic("netClose unimplemented");
+fn netClose(_: ?*anyopaque, handles: []const net.Socket.Handle) void {
+    for (handles) |handle| system.close(handle);
 }
 
 fn netShutdown(_: ?*anyopaque, _: net.Socket.Handle, _: net.ShutdownHow) net.ShutdownError!void {
     @panic("netShutdown unimplemented");
 }
 
-fn netRead(_: ?*anyopaque, _: net.Socket.Handle, _: [][]u8) net.Stream.Reader.Error!usize {
-    @panic("netRead unimplemented");
+fn netRead(_: ?*anyopaque, handle: net.Socket.Handle, data: [][]u8) net.Stream.Reader.Error!usize {
+    for (data) |buf| {
+        if (buf.len == 0) continue;
+        return try system.read(handle, buf);
+    }
+
+    return 0;
 }
 
 fn netWrite(
     _: ?*anyopaque,
-    _: net.Socket.Handle,
-    _: []const u8,
-    _: []const []const u8,
-    _: usize,
+    handle: net.Socket.Handle,
+    header: []const u8,
+    data: []const []const u8,
+    splat: usize,
 ) net.Stream.Writer.Error!usize {
-    @panic("netWrite unimplemented");
+    if (header.len != 0) {
+        return try system.write(handle, header);
+    }
+
+    for (data[0 .. data.len - 1]) |buf| {
+        if (buf.len == 0) continue;
+        return try system.write(handle, buf);
+    }
+
+    const pattern = data[data.len - 1];
+    if (pattern.len == 0 or splat == 0) return 0;
+    return try system.write(handle, pattern);
 }
 
 fn netWriteFile(
@@ -833,6 +924,86 @@ fn netLookup(
     _: HostName.LookupOptions,
 ) net.HostName.LookupError!void {
     @panic("netLookup unimplemented");
+}
+
+const PosixAddress = extern union {
+    any: sockaddr,
+    in: sockaddr.in,
+    in6: sockaddr.in6,
+};
+
+fn posixAddressFamily(a: *const IpAddress) sa_family_t {
+    return switch (a.*) {
+        .ip4 => AF.INET,
+        .ip6 => AF.INET6,
+    };
+}
+
+fn posixSocketMode(mode: net.Socket.Mode) u32 {
+    return switch (mode) {
+        .stream => SOCK.STREAM,
+        .dgram => SOCK.DGRAM,
+        .seqpacket => SOCK.SEQPACKET,
+        .raw => SOCK.RAW,
+        .rdm => SOCK.RDM,
+    };
+}
+
+fn posixProtocol(protocol: ?net.Protocol) u32 {
+    return @intFromEnum(protocol orelse return 0);
+}
+
+fn addressFromPosix(posix_address: *const PosixAddress) IpAddress {
+    return switch (posix_address.any.family) {
+        AF.INET => .{ .ip4 = address4FromPosix(&posix_address.in) },
+        AF.INET6 => .{ .ip6 = address6FromPosix(&posix_address.in6) },
+        else => .{ .ip4 = .loopback(0) },
+    };
+}
+
+fn address4FromPosix(in: *const posix.sockaddr.in) net.Ip4Address {
+    return .{
+        .port = std.mem.bigToNative(u16, in.port),
+        .bytes = @bitCast(in.addr),
+    };
+}
+
+fn address6FromPosix(in6: *const posix.sockaddr.in6) net.Ip6Address {
+    return .{
+        .port = std.mem.bigToNative(u16, in6.port),
+        .bytes = in6.addr,
+        .flow = in6.flowinfo,
+        .interface = .{ .index = in6.scope_id },
+    };
+}
+
+fn addressToPosix(a: *const IpAddress, storage: *PosixAddress) socklen_t {
+    return switch (a.*) {
+        .ip4 => |ip4| {
+            storage.in = address4ToPosix(ip4);
+            return @sizeOf(sockaddr.in);
+        },
+        .ip6 => |*ip6| {
+            storage.in6 = address6ToPosix(ip6);
+            return @sizeOf(sockaddr.in6);
+        },
+    };
+}
+
+fn address4ToPosix(a: net.Ip4Address) posix.sockaddr.in {
+    return .{
+        .port = std.mem.nativeToBig(u16, a.port),
+        .addr = @bitCast(a.bytes),
+    };
+}
+
+fn address6ToPosix(a: *const net.Ip6Address) posix.sockaddr.in6 {
+    return .{
+        .port = std.mem.nativeToBig(u16, a.port),
+        .flowinfo = a.flow,
+        .addr = a.bytes,
+        .scope_id = a.interface.index,
+    };
 }
 
 const system = struct {
@@ -891,7 +1062,7 @@ const system = struct {
         }
     }
 
-    pub fn read(fd: fd_t, buf: []u8) File.Reader.Error!usize {
+    pub fn read(fd: fd_t, buf: []u8) !usize {
         const max_count = switch (native_os) {
             .linux => 0x7ffff000,
             .macos, .ios, .watchos, .tvos, .visionos => maxInt(i32),
@@ -904,11 +1075,11 @@ const system = struct {
                 .INTR => continue,
                 .INVAL => unreachable,
                 .FAULT => unreachable,
-                .AGAIN => return error.WouldBlock,
+                //.AGAIN => return error.WouldBlock,
                 .CANCELED => return error.Canceled,
-                .BADF => return error.NotOpenForReading, // Can be a race condition.
-                .IO => return error.InputOutput,
-                .ISDIR => return error.IsDir,
+                //.BADF => return error.NotOpenForReading, // Can be a race condition.
+                //.IO => return error.InputOutput,
+                //.ISDIR => return error.IsDir,
                 .NOBUFS => return error.SystemResources,
                 .NOMEM => return error.SystemResources,
                 .CONNRESET => return error.ConnectionResetByPeer,
@@ -917,7 +1088,7 @@ const system = struct {
         }
     }
 
-    pub fn write(fd: fd_t, bytes: []const u8) File.Writer.Error!usize {
+    pub fn write(fd: fd_t, bytes: []const u8) !usize {
         const max_count = switch (native_os) {
             .linux => 0x7ffff000,
             .macos, .ios, .watchos, .tvos, .visionos => maxInt(i32),
@@ -930,17 +1101,17 @@ const system = struct {
                 .INTR => continue,
                 .INVAL => return error.Unexpected,
                 .FAULT => return error.Unexpected,
-                .AGAIN => return error.WouldBlock,
-                .BADF => return error.NotOpenForWriting, // Can be a race condition.
+                //.AGAIN => return error.WouldBlock,
+                //.BADF => return error.NotOpenForWriting, // Can be a race condition.
                 .DESTADDRREQ => return error.Unexpected, // `connect` was never called.
-                .DQUOT => return error.DiskQuota,
-                .FBIG => return error.FileTooBig,
-                .IO => return error.InputOutput,
-                .NOSPC => return error.NoSpaceLeft,
-                .PERM => return error.PermissionDenied,
-                .PIPE => return error.BrokenPipe,
+                //.DQUOT => return error.DiskQuota,
+                //.FBIG => return error.FileTooBig,
+                //.IO => return error.InputOutput,
+                //.NOSPC => return error.NoSpaceLeft,
+                //.PERM => return error.PermissionDenied,
+                //.PIPE => return error.BrokenPipe,
                 .CONNRESET => return error.Unexpected, // Not a socket handle.
-                .BUSY => return error.DeviceBusy,
+                //.BUSY => return error.DeviceBusy,
                 else => return error.Unexpected,
             }
         }
@@ -970,7 +1141,8 @@ const system = struct {
     }
 
     pub fn lseek(fd: fd_t, offset: off_t, whence: c_int) File.SeekError!void {
-        switch (errno(private.lseek(fd, @bitCast(offset), whence))) {
+        const rc = private.lseek(fd, @bitCast(offset), whence);
+        switch (errno(rc)) {
             .SUCCESS => return,
             .BADF => unreachable, // always a race condition
             .INVAL => return error.Unseekable,
@@ -981,6 +1153,114 @@ const system = struct {
         }
     }
 
+    pub fn socket(domain: u32, socket_type: u32, protocol: u32) !socket_t {
+        const rc = private.socket(domain, socket_type, protocol);
+        switch (errno(rc)) {
+            .SUCCESS => return @intCast(rc),
+            //.ACCES => return error.AccessDenied,
+            .AFNOSUPPORT => return error.AddressFamilyUnsupported,
+            .INVAL => return error.ProtocolUnsupportedByAddressFamily,
+            .MFILE => return error.ProcessFdQuotaExceeded,
+            .NFILE => return error.SystemFdQuotaExceeded,
+            .NOBUFS => return error.SystemResources,
+            .NOMEM => return error.SystemResources,
+            .PROTONOSUPPORT => return error.ProtocolUnsupportedBySystem,
+            .PROTOTYPE => return error.SocketModeUnsupported,
+            else => return error.Unexpected,
+        }
+    }
+
+    pub fn bind(sock: socket_t, addr: *const posix.sockaddr, addr_len: posix.socklen_t) IpAddress.BindError!void {
+        while (true) {
+            const rc = private.bind(sock, addr, addr_len);
+            switch (errno(rc)) {
+                .SUCCESS => return,
+                .INTR => continue,
+                //.ACCES => return error.AccessDenied,
+                .ADDRINUSE => return error.AddressInUse,
+                .AFNOSUPPORT => return error.AddressFamilyUnsupported,
+                .ADDRNOTAVAIL => return error.AddressUnavailable,
+                .NOMEM => return error.SystemResources,
+
+                //.LOOP => return error.SymLinkLoop,
+                //.NOENT => return error.FileNotFound,
+                //.NOTDIR => return error.NotDir,
+                //.ROFS => return error.ReadOnlyFileSystem,
+                //.PERM => return error.PermissionDenied,
+
+                else => return error.Unexpected,
+            }
+        }
+    }
+
+    pub fn listen(sock: socket_t, backlog: u31) !void {
+        while (true) {
+            const rc = private.listen(sock, backlog);
+            switch (errno(rc)) {
+                .SUCCESS => return,
+                .INTR => continue,
+                .ADDRINUSE => return error.AddressInUse,
+                .BADF => unreachable,
+                //.NOTSOCK => return error.FileDescriptorNotASocket,
+                //.OPNOTSUPP => return error.OperationNotSupported,
+                else => return error.Unexpected,
+            }
+        }
+    }
+
+    pub fn accept(sock: socket_t, addr: ?*sockaddr, addr_size: ?*socklen_t) !socket_t {
+        while (true) {
+            const rc = private.accept(sock, addr, addr_size);
+            switch (errno(rc)) {
+                .SUCCESS => return @intCast(rc),
+                .INTR => continue,
+                .CONNABORTED => return error.ConnectionAborted,
+                .INVAL => return error.SocketNotListening,
+                .MFILE => return error.ProcessFdQuotaExceeded,
+                .NFILE => return error.SystemFdQuotaExceeded,
+                .NOBUFS => return error.SystemResources,
+                .NOMEM => return error.SystemResources,
+                .PROTO => return error.ProtocolFailure,
+                .PERM => return error.BlockedByFirewall,
+                else => return error.Unexpected,
+            }
+        }
+    }
+
+    pub fn connect(sock: socket_t, addr: *sockaddr, addr_size: socklen_t) !void {
+        while (true) {
+            const rc = private.connect(sock, addr, addr_size);
+            switch (errno(rc)) {
+                .SUCCESS => return,
+                .INTR => continue,
+                .ADDRNOTAVAIL => return error.AddressUnavailable,
+                .AFNOSUPPORT => return error.AddressFamilyUnsupported,
+                .AGAIN, .INPROGRESS => return error.WouldBlock,
+                .ALREADY => return error.ConnectionPending,
+                .CONNREFUSED => return error.ConnectionRefused,
+                .CONNRESET => return error.ConnectionResetByPeer,
+                .HOSTUNREACH => return error.HostUnreachable,
+                .NETUNREACH => return error.NetworkUnreachable,
+                .TIMEDOUT => return error.Timeout,
+                .ACCES => return error.AccessDenied,
+                .NETDOWN => return error.NetworkDown,
+                else => return error.Unexpected,
+            }
+        }
+    }
+
+    fn setsockopt(sock: socket_t, level: i32, opt_name: u32, option: u32) !void {
+        const o: []const u8 = @ptrCast(&option);
+        while (true) {
+            const rc = private.setsockopt(sock, level, opt_name, o.ptr, @intCast(o.len));
+            switch (errno(rc)) {
+                .SUCCESS => return,
+                .INTR => continue,
+                else => return error.Unexpected,
+            }
+        }
+    }
+
     const private = struct {
         extern "c" fn open(path: [*:0]const u8, oflag: O, ...) c_int;
         extern "c" fn close(fd: fd_t) c_int;
@@ -988,5 +1268,11 @@ const system = struct {
         extern "c" fn write(fd: fd_t, buf: [*]const u8, nbyte: usize) isize;
         extern "c" fn unlink(path: [*:0]const u8) c_int;
         extern "c" fn lseek(fd: fd_t, offset: off_t, whence: c_int) off_t;
+        extern "c" fn socket(domain: c_uint, sock_type: c_uint, protocol: c_uint) c_int;
+        extern "c" fn bind(socket: fd_t, address: ?*const sockaddr, address_len: socklen_t) c_int;
+        extern "c" fn listen(sockfd: fd_t, backlog: c_uint) c_int;
+        extern "c" fn accept(sockfd: fd_t, noalias addr: ?*sockaddr, noalias addrlen: ?*socklen_t) c_int;
+        extern "c" fn connect(sockfd: fd_t, sock_addr: *const sockaddr, addrlen: socklen_t) c_int;
+        extern "c" fn setsockopt(sockfd: fd_t, level: i32, optname: u32, optval: ?*const anyopaque, optlen: socklen_t) c_int;
     };
 };
