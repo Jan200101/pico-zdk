@@ -7,7 +7,7 @@ function(zig_import_targets)
         ZARG # prefix of output variables
         "REQUIRED" # list of names of the boolean arguments (only defined ones will be true)
         "PATH;COMPILE_TARGET;COMPILE_CPU" # list of names of mono-valued arguments
-        "TARGETS" # list of names of multi-valued arguments (output variables are lists)
+        "TARGETS;OPTIONS" # list of names of multi-valued arguments (output variables are lists)
         ${ARGN} # arguments of the function to parse, here we take the all original ones
     )
     message(CHECK_START "Importing zig targets")
@@ -27,6 +27,9 @@ function(zig_import_targets)
     if (ZARG_COMPILE_CPU)
         list(APPEND ZIG_BUILD_ARGS "-Dcpu=${ZARG_COMPILE_CPU}")
     endif()
+    foreach(option IN LISTS ZARG_OPTIONS)
+        list(APPEND ZIG_BUILD_ARGS "-D${option}")
+    endforeach()
 
     if("${CMAKE_BUILD_TYPE}" STREQUAL "DEBUG")
         # Debug is default
@@ -45,7 +48,7 @@ function(zig_import_targets)
         WORKING_DIRECTORY ${ZARG_PATH}
         OUTPUT_VARIABLE TARGET_LIST
         RESULT_VARIABLE STATUS_CODE
-        #COMMAND_ECHO STDOUT
+        COMMAND_ECHO STDOUT
     )
 
     # This is needed to trigger relinking when something changed on the zig side

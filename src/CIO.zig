@@ -21,6 +21,11 @@ const socket_t = posix.socket_t;
 
 const root = @import("root");
 
+const has_networking = if (@hasDecl(root, "options") and @hasDecl(root.options, "networking"))
+    root.options.networking
+else
+    true;
+
 var stderr_writer: File.Writer = .{
     .io = io(),
     .interface = Io.File.Writer.initInterface(&.{}),
@@ -733,6 +738,9 @@ fn netListenIp(
     address: IpAddress,
     options: IpAddress.ListenOptions,
 ) IpAddress.ListenError!net.Server {
+    if (!has_networking)
+        return error.NetworkDown;
+
     const family = posixAddressFamily(&address);
     const mode = posixSocketMode(options.mode);
     const protocol = posixProtocol(options.protocol);
@@ -770,6 +778,9 @@ fn netListenUnix(
 }
 
 fn netAccept(_: ?*anyopaque, listen_fd: net.Socket.Handle) net.Server.AcceptError!net.Stream {
+    if (!has_networking)
+        return error.NetworkDown;
+
     var storage: PosixAddress = undefined;
     var addr_len: posix.socklen_t = @sizeOf(PosixAddress);
 
@@ -788,6 +799,9 @@ fn netBindIp(
     address: *const IpAddress,
     options: IpAddress.BindOptions,
 ) IpAddress.BindError!net.Socket {
+    if (!has_networking)
+        return error.NetworkDown;
+
     const family = posixAddressFamily(address);
     const mode = posixSocketMode(options.mode);
     const protocol = posixProtocol(options.protocol);
@@ -811,6 +825,9 @@ fn netConnectIp(
     address: *const IpAddress,
     options: IpAddress.ConnectOptions,
 ) IpAddress.ConnectError!net.Stream {
+    if (!has_networking)
+        return error.NetworkDown;
+
     const family = posixAddressFamily(address);
     const mode = posixSocketMode(options.mode);
     const protocol = posixProtocol(options.protocol);
@@ -839,6 +856,9 @@ fn netConnectUnix(
 }
 
 fn netClose(_: ?*anyopaque, handles: []const net.Socket.Handle) void {
+    if (!has_networking)
+        return;
+
     for (handles) |handle| system.close(handle);
 }
 
@@ -847,6 +867,9 @@ fn netShutdown(_: ?*anyopaque, _: net.Socket.Handle, _: net.ShutdownHow) net.Shu
 }
 
 fn netRead(_: ?*anyopaque, handle: net.Socket.Handle, data: [][]u8) net.Stream.Reader.Error!usize {
+    if (!has_networking)
+        return error.NetworkDown;
+
     for (data) |buf| {
         if (buf.len == 0) continue;
         return try system.read(handle, buf);
@@ -862,6 +885,9 @@ fn netWrite(
     data: []const []const u8,
     splat: usize,
 ) net.Stream.Writer.Error!usize {
+    if (!has_networking)
+        return error.NetworkDown;
+
     if (header.len != 0) {
         return try system.write(handle, header);
     }
@@ -943,9 +969,9 @@ fn posixSocketMode(mode: net.Socket.Mode) u32 {
     return switch (mode) {
         .stream => SOCK.STREAM,
         .dgram => SOCK.DGRAM,
-        .seqpacket => SOCK.SEQPACKET,
+        .seqpacket => unreachable,
         .raw => SOCK.RAW,
-        .rdm => SOCK.RDM,
+        .rdm => unreachable,
     };
 }
 
@@ -961,14 +987,14 @@ fn addressFromPosix(posix_address: *const PosixAddress) IpAddress {
     };
 }
 
-fn address4FromPosix(in: *const posix.sockaddr.in) net.Ip4Address {
+fn address4FromPosix(in: *const sockaddr.in) net.Ip4Address {
     return .{
         .port = std.mem.bigToNative(u16, in.port),
         .bytes = @bitCast(in.addr),
     };
 }
 
-fn address6FromPosix(in6: *const posix.sockaddr.in6) net.Ip6Address {
+fn address6FromPosix(in6: *const sockaddr.in6) net.Ip6Address {
     return .{
         .port = std.mem.bigToNative(u16, in6.port),
         .bytes = in6.addr,
@@ -990,14 +1016,14 @@ fn addressToPosix(a: *const IpAddress, storage: *PosixAddress) socklen_t {
     };
 }
 
-fn address4ToPosix(a: net.Ip4Address) posix.sockaddr.in {
+fn address4ToPosix(a: net.Ip4Address) sockaddr.in {
     return .{
         .port = std.mem.nativeToBig(u16, a.port),
         .addr = @bitCast(a.bytes),
     };
 }
 
-fn address6ToPosix(a: *const net.Ip6Address) posix.sockaddr.in6 {
+fn address6ToPosix(a: *const net.Ip6Address) sockaddr.in6 {
     return .{
         .port = std.mem.nativeToBig(u16, a.port),
         .flowinfo = a.flow,
@@ -1170,7 +1196,7 @@ const system = struct {
         }
     }
 
-    pub fn bind(sock: socket_t, addr: *const posix.sockaddr, addr_len: posix.socklen_t) IpAddress.BindError!void {
+    pub fn bind(sock: socket_t, addr: *const sockaddr, addr_len: posix.socklen_t) IpAddress.BindError!void {
         while (true) {
             const rc = private.bind(sock, addr, addr_len);
             switch (errno(rc)) {

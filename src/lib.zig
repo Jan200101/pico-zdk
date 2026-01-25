@@ -8,6 +8,8 @@ const IpAddress = net.IpAddress;
 const http = std.http;
 const HttpServer = http.Server;
 
+pub const options = @import("options");
+
 const CIO = @import("CIO.zig");
 
 pub const c = @import("newlib.zig");

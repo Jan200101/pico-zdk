@@ -8,6 +8,8 @@ const Allocator = std.mem.Allocator;
 const http = std.http;
 const HttpServer = http.Server;
 
+pub const options = @import("options");
+
 const lib = @import("lib.zig");
 const CIO = @import("CIO.zig");
 
@@ -16,10 +18,6 @@ pub const debug = @import("debug.zig");
 pub const std_options_debug_io = CIO.io();
 pub const std_options_cwd = CIO.cwd;
 pub const panic = std.debug.FullPanic(debug.panic);
-
-fn handleRequest(request: *HttpServer.Request) !void {
-    try request.respond("Hello World!", .{});
-}
 
 pub fn main() !void {
     //lib.test_print();

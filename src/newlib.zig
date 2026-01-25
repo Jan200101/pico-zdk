@@ -110,6 +110,71 @@ pub const SEEK = struct {
     pub const END = 2;
 };
 
+// lwip src/include/lwip/sockets.h
+pub const sa_family_t = u8;
+pub const in_port_t = u16;
+pub const in_addr_t = u32;
+
+pub const in_addr = extern struct {
+    addr: in_addr_t,
+};
+
+pub const in6_addr = [16]u8;
+
+pub const sockaddr = extern struct {
+    len: u8,
+    family: sa_family_t,
+    data: [14]u8,
+
+    pub const storage = extern struct {
+        len: u8,
+        family: sa_family_t,
+        data1: [2]c_char,
+        data2: [3]u32,
+        data3: [3]u32,
+    };
+
+    pub const SIN_ZERO_LEN = 8;
+    pub const in = extern struct {
+        len: u8 = @sizeOf(in),
+        family: sa_family_t = AF.INET,
+        port: in_port_t,
+        addr: in_addr,
+        zero: [SIN_ZERO_LEN]c_char = @splat(0),
+    };
+
+    pub const in6 = extern struct {
+        len: u8 = @sizeOf(in6),
+        family: sa_family_t = AF.INET6,
+        port: in_port_t,
+        flowinfo: u32,
+        addr: in6_addr,
+        scope_id: u32,
+    };
+};
+
+pub const AF = struct {
+    pub const UNSPEC = 0;
+    pub const INET = 2;
+    pub const INET6 = 10;
+};
+
+pub const SOCK = struct {
+    pub const STREAM = 1;
+    pub const DGRAM = 2;
+    pub const RAW = 3;
+};
+
+pub const SOL = struct {
+    pub const SOCKET = 0xfff;
+};
+
+pub const SO = struct {
+    pub const REUSEADDR = 0x0004;
+    pub const KEEPALIVE = 0x0008;
+    pub const BROADCAST = 0x0020;
+};
+
 const private = struct {
     extern "c" fn __errno() *c_int;
 };

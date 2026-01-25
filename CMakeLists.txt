@@ -12,25 +12,37 @@ pico_sdk_init()
 
 find_package(littlefs)
 
+if (PICO_CYW43_SUPPORTED)
+    set(ZIG_NETWORKING "true")
+else()
+    set(ZIG_NETWORKING "false")
+endif()
+
 zig_import_targets(
     PATH "${CMAKE_CURRENT_SOURCE_DIR}"
     COMPILE_TARGET thumb-other-eabi
     COMPILE_CPU cortex_m0plus
+    OPTIONS networking=${ZIG_NETWORKING}
     REQUIRED
 )
 
 add_executable(pico_zdk
-	src/main.c
+    src/main.c
     src/newlib_interface.c
 )
-
+target_include_directories(pico_zdk PUBLIC src/)
 target_link_libraries(pico_zdk PUBLIC
-	pico_stdlib
+    pico_stdlib
     hardware_flash
     hardware_sync
     littlefs
-	zig::example
+    zig::example
 )
+if (PICO_CYW43_SUPPORTED)
+    target_link_libraries(pico_zdk PUBLIC
+        pico_cyw43_arch_lwip_threadsafe_background
+    )
+endif()
 target_link_options(pico_zdk PRIVATE -Wl,--print-memory-usage)
 
 pico_enable_stdio_usb(pico_zdk 1)
