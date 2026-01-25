@@ -1,8 +1,12 @@
 const std = @import("std");
 const builtin = @import("builtin");
 const Io = std.Io;
+const net = Io.net;
 const Writer = Io.Writer;
 const Allocator = std.mem.Allocator;
+const IpAddress = net.IpAddress;
+const http = std.http;
+const HttpServer = http.Server;
 
 const CIO = @import("CIO.zig");
 
@@ -99,4 +103,56 @@ pub export fn test_file(path: [*:0]const u8) void {
         };
     }
     std.debug.print("successfully deleted {s}\n\n", .{f});
+}
+
+pub export fn test_http_server() void {
+    http_server_impl() catch |err| {
+        std.debug.print("failed to server HTTP Server: {t}\n\n", .{err});
+    };
+}
+
+fn http_server_impl() !void {
+    const io = CIO.io();
+
+    const addr = try IpAddress.parseIp4("0.0.0.0", 9999);
+    var server = try IpAddress.listen(addr, io, .{ .reuse_address = true });
+    defer server.deinit(io);
+
+    std.debug.print("Starting HTTP server at http://{f}\n", .{addr});
+
+    var recv_buffer: [1024]u8 = undefined;
+    var send_buffer: [2048]u8 = undefined;
+
+    accept: while (true) {
+        const connection = try server.accept(io);
+        defer connection.close(io);
+
+        std.debug.print("connection from {f}\n", .{connection.socket.address});
+
+        var connection_br = connection.reader(io, &recv_buffer);
+        var connection_bw = connection.writer(io, &send_buffer);
+
+        var http_server: HttpServer = .init(&connection_br.interface, &connection_bw.interface);
+        while (http_server.reader.state == .ready) {
+            var request = http_server.receiveHead() catch |err| switch (err) {
+                error.HttpConnectionClosing => break,
+                else => {
+                    std.debug.print("error: {s}\n", .{@errorName(err)});
+                    continue :accept;
+                },
+            };
+
+            switch (request.upgradeRequested()) {
+                .other => |proto| std.debug.print("Unsupported protocol {s}\n", .{proto}),
+                .websocket => |_| std.debug.print("Websocket unsupported\n", .{}),
+                .none => handleRequest(&request) catch |err| {
+                    std.debug.print("failed to handle request: {s}\n", .{@errorName(err)});
+                },
+            }
+        }
+    }
+}
+
+fn handleRequest(request: *HttpServer.Request) !void {
+    try request.respond("Hello World!", .{});
 }
