@@ -1,11 +1,23 @@
 #include <stdio.h>
 #include "pico/stdlib.h"
 
+#if PICO_CYW43_SUPPORTED
+#include "pico/cyw43_arch.h"
+#endif
+
 #include "FreeRTOS.h"
 #include "task.h"
 
 #ifndef RUN_FREERTOS_ON_CORE
 #define RUN_FREERTOS_ON_CORE 
+#endif
+
+#ifndef WIFI_SSID
+#define WIFI_SSID ""
+#endif
+
+#ifndef WIFI_PASSWORD
+#define WIFI_PASSWORD ""
 #endif
 
 #define MAIN_TASK_PRIORITY ( tskIDLE_PRIORITY + 1UL )

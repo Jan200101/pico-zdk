@@ -46,7 +46,9 @@ target_link_libraries(pico_zdk PUBLIC
 )
 if (PICO_CYW43_SUPPORTED)
     target_link_libraries(pico_zdk PUBLIC
-        pico_cyw43_arch_lwip_threadsafe_background
+        pico_lwip_freertos
+        pico_cyw43_arch
+        pico_cyw43_arch_sys_freertos
     )
 endif()
 target_link_options(pico_zdk PRIVATE -Wl,--print-memory-usage)

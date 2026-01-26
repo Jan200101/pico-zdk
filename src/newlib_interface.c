@@ -4,10 +4,16 @@
 #include "hardware/flash.h"
 #include "hardware/sync.h"
 #include "pico/time.h"
+
+#include "lfs.h"
+
 #if LIB_PICO_STDIO
 #include "pico/stdio.h"
 #endif
-#include "lfs.h"
+
+#if PICO_CYW43_SUPPORTED
+#include "lwip/sockets.h"
+#endif
 
 #define STDIO_HANDLE_STDIN  0
 #define STDIO_HANDLE_STDOUT 1
@@ -237,4 +243,37 @@ off_t _lseek(int fd, off_t pos, int whence) {
     }
 
     return 0;
+}
+
+int socket(int domain, int type, int protocol)
+{
+    return lwip_socket(domain, type, protocol);
+}
+
+int bind(int sockfd, const struct sockaddr *addr, socklen_t addrlen)
+{
+    return lwip_bind(sockfd, addr, addrlen);
+}
+
+int listen(int sockfd, int backlog)
+{
+    return lwip_listen(sockfd, backlog);
+}
+
+int accept(int sockfd, struct sockaddr* addr, socklen_t* addrlen)
+{
+    return lwip_accept(sockfd, addr, addrlen);
+}
+
+int connect(int sockfd, const struct sockaddr* addr, socklen_t addrlen)
+{
+    return lwip_connect(sockfd, addr, addrlen);
+}
+
+int setsockopt(
+    int sockfd, int level, int optname,
+    const void* optval,
+    socklen_t optlen)
+{
+    return lwip_setsockopt(sockfd, level, optname, optval, optlen);
 }
