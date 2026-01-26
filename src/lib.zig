@@ -146,7 +146,7 @@ fn http_server_impl() !void {
 
             switch (request.upgradeRequested()) {
                 .other => |proto| std.debug.print("Unsupported protocol {s}\n", .{proto}),
-                .websocket => |_| std.debug.print("Websocket unsupported\n", .{}),
+                .websocket => std.debug.print("Websocket unsupported\n", .{}),
                 .none => handleRequest(&request) catch |err| {
                     std.debug.print("failed to handle request: {s}\n", .{@errorName(err)});
                 },

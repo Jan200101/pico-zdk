@@ -148,6 +148,11 @@ pub fn io() Io {
             .fileDowngradeLock = fileDowngradeLock,
             .fileRealPath = fileRealPath,
             .fileHardLink = fileHardLink,
+            .fileMemoryMapCreate = fileMemoryMapCreate,
+            .fileMemoryMapDestroy = fileMemoryMapDestroy,
+            .fileMemoryMapSetLength = fileMemoryMapSetLength,
+            .fileMemoryMapRead = fileMemoryMapRead,
+            .fileMemoryMapWrite = fileMemoryMapWrite,
 
             .processExecutableOpen = processExecutableOpen,
             .processExecutablePath = processExecutablePath,
@@ -657,7 +662,44 @@ fn fileHardLink(
     _: []const u8,
     _: File.HardLinkOptions,
 ) File.HardLinkError!void {
-    @panic("unimplemented");
+    @panic("fileHardLink unimplemented");
+}
+
+fn fileMemoryMapCreate(
+    _: ?*anyopaque,
+    _: File,
+    _: File.MemoryMap.CreateOptions,
+) File.MemoryMap.CreateError!File.MemoryMap {
+    @panic("fileMemoryMapCreate unimplemented");
+}
+
+fn fileMemoryMapDestroy(
+    _: ?*anyopaque,
+    _: *File.MemoryMap,
+) void {
+    @panic("fileMemoryMapDestroy unimplemented");
+}
+
+fn fileMemoryMapSetLength(
+    _: ?*anyopaque,
+    _: *File.MemoryMap,
+    _: File.MemoryMap.CreateOptions,
+) File.MemoryMap.SetLengthError!void {
+    @panic("fileMemoryMapSetLength unimplemented");
+}
+
+fn fileMemoryMapRead(
+    _: ?*anyopaque,
+    _: *File.MemoryMap,
+) File.ReadPositionalError!void {
+    @panic("fileMemoryMapRead unimplemented");
+}
+
+fn fileMemoryMapWrite(
+    _: ?*anyopaque,
+    _: *File.MemoryMap,
+) File.WritePositionalError!void {
+    @panic("fileMemoryMapWrite unimplemented");
 }
 
 fn processExecutableOpen(_: ?*anyopaque, _: File.OpenFlags) process.OpenExecutableError!File {

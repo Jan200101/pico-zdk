@@ -20,8 +20,8 @@ pub const std_options_cwd = CIO.cwd;
 pub const panic = std.debug.FullPanic(debug.panic);
 
 pub fn main() !void {
-    //lib.test_print();
-    //lib.test_file("TEST_FILE");
+    lib.test_print();
+    lib.test_file("TEST_FILE");
     //lib.test_panic();
 
     lib.test_http_server();
