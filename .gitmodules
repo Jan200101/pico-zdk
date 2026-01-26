@@ -1,3 +1,6 @@
 [submodule "deps/littlefs"]
 	path = deps/littlefs
 	url = https://github.com/littlefs-project/littlefs
+[submodule "deps/freertos/FreeRTOS-Kernel"]
+	path = deps/freertos/FreeRTOS-Kernel
+	url = https://github.com/FreeRTOS/FreeRTOS-Kernel

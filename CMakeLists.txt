@@ -11,6 +11,8 @@ set(PICO_CLIB newlib)
 pico_sdk_init()
 
 find_package(littlefs)
+add_subdirectory(deps/freertos)
+include_directories(deps/freertos)
 
 if (PICO_CYW43_SUPPORTED)
     set(ZIG_NETWORKING "true")
@@ -31,11 +33,15 @@ add_executable(pico_zdk
     src/newlib_interface.c
 )
 target_include_directories(pico_zdk PUBLIC src/)
+target_compile_definitions(pico_zdk PRIVATE
+    PICO_CYW43_SUPPORTED=$<BOOL:${PICO_CYW43_SUPPORTED}>
+)
 target_link_libraries(pico_zdk PUBLIC
     pico_stdlib
     hardware_flash
     hardware_sync
     littlefs
+    FreeRTOS-Kernel-Heap3
     zig::example
 )
 if (PICO_CYW43_SUPPORTED)
