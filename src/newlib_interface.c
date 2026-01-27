@@ -13,6 +13,9 @@
 
 #if PICO_CYW43_SUPPORTED
 #include "lwip/sockets.h"
+#else
+struct sockaddr;
+typedef int socklen_t;
 #endif
 
 #define STDIO_HANDLE_STDIN  0
