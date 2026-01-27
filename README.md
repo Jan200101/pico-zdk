@@ -6,6 +6,8 @@ To enable the use of the Zig standard library an (incomplete) IO layer was writt
 Support for File IO is provided through LittleFS and Networking is implemented through Lwip.
 Lwip only supports POSIX sockets when used on a multitasking system for which FreeRTOS was chosen.
 
+For demo purposes `main.c` will call functions to test stdout IO, File IO and depending on if Networking is available either Zigs stdlib HTTP Server or a test panic.
+
 ## requirements
 - ~0.16.0-dev.2319
 - [pico-sdk](https://github.com/raspberrypi/pico-sdk)
