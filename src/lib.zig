@@ -109,7 +109,7 @@ pub export fn test_file(path: [*:0]const u8) void {
 
 pub export fn test_http_server() void {
     http_server_impl() catch |err| {
-        std.debug.print("failed to server HTTP Server: {t}\n\n", .{err});
+        std.debug.print("failed to run HTTP Server: {t}\n\n", .{err});
     };
 }
 
