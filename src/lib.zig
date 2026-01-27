@@ -1,6 +1,8 @@
 const std = @import("std");
 const builtin = @import("builtin");
 const Io = std.Io;
+const File = Io.File;
+const Dir = Io.Dir;
 const net = Io.net;
 const Writer = Io.Writer;
 const Allocator = std.mem.Allocator;
@@ -27,7 +29,7 @@ pub const std_options: std.Options = .{
 pub export fn test_print() void {
     const io = CIO.io();
 
-    std.Io.File.stdout().writeStreamingAll(io, "Hello World from Zig stdout!\n") catch {};
+    File.stdout().writeStreamingAll(io, "Hello World from Zig stdout!\n") catch {};
 
     std.debug.print("Hello World from Zig debug print\n\n", .{});
 }
@@ -38,7 +40,7 @@ pub export fn test_panic() void {
 
 pub export fn test_file(path: [*:0]const u8) void {
     const io = CIO.io();
-    const cwd = std.Io.Dir.cwd();
+    const cwd = Dir.cwd();
 
     const f: []const u8 = std.mem.span(path);
 
