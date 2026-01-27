@@ -28,6 +28,9 @@ zig_import_targets(
     REQUIRED
 )
 
+set(WIFI_SSID "" CACHE STRING "")
+set(WIFI_PASSWORD "" CACHE STRING "")
+
 add_executable(pico_zdk
     src/main.c
     src/newlib_interface.c
@@ -35,6 +38,9 @@ add_executable(pico_zdk
 target_include_directories(pico_zdk PUBLIC src/)
 target_compile_definitions(pico_zdk PRIVATE
     PICO_CYW43_SUPPORTED=$<BOOL:${PICO_CYW43_SUPPORTED}>
+    WIFI_SSID=\"${WIFI_SSID}\"
+    WIFI_PASSWORD=\"${WIFI_PASSWORD}\"
+    $<$<CONFIG:Debug>:DEBUG=1>
 )
 target_link_libraries(pico_zdk PUBLIC
     pico_stdlib

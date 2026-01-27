@@ -19,6 +19,11 @@
 #define STDIO_HANDLE_STDOUT 1
 #define STDIO_HANDLE_STDERR 2
 
+#define NET_FD_OFFSET 100
+#define IS_NET_FD(fd) (fd > NET_FD_OFFSET ? 1 : 0)
+#define TO_NET_FD(fd) (fd > -1 ? (fd + NET_FD_OFFSET): (fd))
+#define FROM_NET_FD(fd) (fd > -1 ? (fd - NET_FD_OFFSET): (fd))
+
 #define HEAP_SIZE      (128 * 1024)
 #define BLOCK_SIZE      4096
 #define READ_SIZE       16
@@ -105,6 +110,9 @@ int _read(int handle, char *buffer, int length) {
     }
 #endif
 
+    if (IS_NET_FD(handle))
+        return lwip_read(FROM_NET_FD(handle), buffer, length);
+
     lfs_file_t* file = fd_list[handle];
     if (file == NULL)
     {
@@ -130,6 +138,9 @@ int _write(int handle, char *buffer, int length) {
         return length;
     }
 #endif
+
+    if (IS_NET_FD(handle))
+        return lwip_write(FROM_NET_FD(handle), buffer, length);
 
     lfs_file_t* file = fd_list[handle];
     if (file == NULL)
@@ -247,27 +258,29 @@ off_t _lseek(int fd, off_t pos, int whence) {
 
 int socket(int domain, int type, int protocol)
 {
-    return lwip_socket(domain, type, protocol);
+    int fd = lwip_socket(domain, type, protocol);
+    return TO_NET_FD(fd);
 }
 
 int bind(int sockfd, const struct sockaddr *addr, socklen_t addrlen)
 {
-    return lwip_bind(sockfd, addr, addrlen);
+    return lwip_bind(FROM_NET_FD(sockfd), addr, addrlen);
 }
 
 int listen(int sockfd, int backlog)
 {
-    return lwip_listen(sockfd, backlog);
+    return lwip_listen(FROM_NET_FD(sockfd), backlog);
 }
 
 int accept(int sockfd, struct sockaddr* addr, socklen_t* addrlen)
 {
-    return lwip_accept(sockfd, addr, addrlen);
+    int fd = lwip_accept(FROM_NET_FD(sockfd), addr, addrlen);    
+    return TO_NET_FD(fd);
 }
 
 int connect(int sockfd, const struct sockaddr* addr, socklen_t addrlen)
 {
-    return lwip_connect(sockfd, addr, addrlen);
+    return lwip_connect(FROM_NET_FD(sockfd), addr, addrlen);
 }
 
 int setsockopt(
@@ -275,5 +288,5 @@ int setsockopt(
     const void* optval,
     socklen_t optlen)
 {
-    return lwip_setsockopt(sockfd, level, optname, optval, optlen);
+    return lwip_setsockopt(FROM_NET_FD(sockfd), level, optname, optval, optlen);
 }

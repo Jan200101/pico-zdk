@@ -791,11 +791,12 @@ fn netListenIp(
     const socket_fd = try system.socket(family, flags, protocol);
     errdefer system.close(socket_fd);
 
-    if (options.reuse_address) {
-        try system.setsockopt(socket_fd, SOL.SOCKET, SO.REUSEADDR, 1);
-        if (@hasDecl(SO, "REUSEPORT"))
-            try system.setsockopt(socket_fd, SOL.SOCKET, SO.REUSEPORT, 1);
-    }
+    //if (options.reuse_address) {
+    //    std.debug.print("setting opts\n", .{});
+    //    try system.setsockopt(socket_fd, SOL.SOCKET, SO.REUSEADDR, 1);
+    //    if (@hasDecl(SO, "REUSEPORT"))
+    //       try system.setsockopt(socket_fd, SOL.SOCKET, SO.REUSEPORT, 1);
+    //}
 
     var storage: PosixAddress = undefined;
     const addr_len = addressToPosix(&address, &storage);

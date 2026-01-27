@@ -21,7 +21,7 @@
 #endif
 
 #define MAIN_TASK_PRIORITY ( tskIDLE_PRIORITY + 1UL )
-#define MAIN_TASK_STACK_SIZE ( configMINIMAL_STACK_SIZE * 4UL )
+#define MAIN_TASK_STACK_SIZE ( configMINIMAL_STACK_SIZE * 16UL )
 
 void test_print(void);
 void test_panic(void);
@@ -53,11 +53,12 @@ void main_task(__unused void *params)
     }
 
     cyw43_arch_enable_sta_mode();
-    printf("Connecting to Wi-Fi...\n");
+    printf("Connecting to WIFI \"" WIFI_SSID "\"...\n");
     if (cyw43_arch_wifi_connect_timeout_ms(WIFI_SSID, WIFI_PASSWORD, CYW43_AUTH_WPA2_AES_PSK, 30000)) {
-        printf("failed to connect.\n");
+        printf("failed to connect\n");
     } else {
-        printf("Connected.\n");
+        printf("connected %s\n", ip4addr_ntoa(&cyw43_state.netif[CYW43_ITF_STA].ip_addr));
+
         test_http_server();
     }
 #endif
