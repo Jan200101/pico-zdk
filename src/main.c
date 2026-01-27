@@ -54,13 +54,12 @@ void main_task(__unused void *params)
 
     cyw43_arch_enable_sta_mode();
     printf("Connecting to WIFI \"" WIFI_SSID "\"...\n");
-    if (cyw43_arch_wifi_connect_timeout_ms(WIFI_SSID, WIFI_PASSWORD, CYW43_AUTH_WPA2_AES_PSK, 30000)) {
+    while (cyw43_arch_wifi_connect_timeout_ms(WIFI_SSID, WIFI_PASSWORD, CYW43_AUTH_WPA2_AES_PSK, 30000)) {
         printf("failed to connect\n");
-    } else {
-        printf("connected %s\n", ip4addr_ntoa(&cyw43_state.netif[CYW43_ITF_STA].ip_addr));
+    } 
 
-        test_http_server();
-    }
+    printf("connected %s\n", ip4addr_ntoa(&cyw43_state.netif[CYW43_ITF_STA].ip_addr));
+    test_http_server();
 #endif
 
     busy_wait_ms(1000);
