@@ -111,7 +111,13 @@ int _read(int handle, char *buffer, int length) {
 #endif
 
     if (IS_NET_FD(handle))
+    {
+#if PICO_CYW43_SUPPORTED
         return lwip_read(FROM_NET_FD(handle), buffer, length);
+#else
+        return -1;
+#endif
+    }
 
     lfs_file_t* file = fd_list[handle];
     if (file == NULL)
@@ -140,7 +146,13 @@ int _write(int handle, char *buffer, int length) {
 #endif
 
     if (IS_NET_FD(handle))
+    {
+#if PICO_CYW43_SUPPORTED
         return lwip_write(FROM_NET_FD(handle), buffer, length);
+#else
+        return -1;
+#endif
+    }
 
     lfs_file_t* file = fd_list[handle];
     if (file == NULL)
@@ -187,6 +199,15 @@ int _open(const char *path, int oflags, ...) {
 }
 
 int _close(int fd) {
+    if (IS_NET_FD(fd))
+    {
+#if PICO_CYW43_SUPPORTED
+        return lwip_close(FROM_NET_FD(fd));
+#else
+        return -1;
+#endif
+    }
+
     lfs_file_t* file = fd_list[fd];
     if (file == NULL)
     {
@@ -258,29 +279,49 @@ off_t _lseek(int fd, off_t pos, int whence) {
 
 int socket(int domain, int type, int protocol)
 {
+#if PICO_CYW43_SUPPORTED
     int fd = lwip_socket(domain, type, protocol);
     return TO_NET_FD(fd);
+#else
+    return -1;
+#endif
 }
 
 int bind(int sockfd, const struct sockaddr *addr, socklen_t addrlen)
 {
+#if PICO_CYW43_SUPPORTED
     return lwip_bind(FROM_NET_FD(sockfd), addr, addrlen);
+#else
+    return -1;
+#endif
 }
 
 int listen(int sockfd, int backlog)
 {
+#if PICO_CYW43_SUPPORTED
     return lwip_listen(FROM_NET_FD(sockfd), backlog);
+#else
+    return -1;
+#endif
 }
 
 int accept(int sockfd, struct sockaddr* addr, socklen_t* addrlen)
 {
+#if PICO_CYW43_SUPPORTED
     int fd = lwip_accept(FROM_NET_FD(sockfd), addr, addrlen);    
     return TO_NET_FD(fd);
+#else
+    return -1;
+#endif
 }
 
 int connect(int sockfd, const struct sockaddr* addr, socklen_t addrlen)
 {
+#if PICO_CYW43_SUPPORTED
     return lwip_connect(FROM_NET_FD(sockfd), addr, addrlen);
+#else
+    return -1;
+#endif
 }
 
 int setsockopt(
@@ -288,5 +329,9 @@ int setsockopt(
     const void* optval,
     socklen_t optlen)
 {
+#if PICO_CYW43_SUPPORTED
     return lwip_setsockopt(FROM_NET_FD(sockfd), level, optname, optval, optlen);
+#else
+    return -1;
+#endif
 }
