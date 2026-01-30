@@ -2,8 +2,13 @@
     .name = .cmake_zig,
     .version = "0.0.0",
     .fingerprint = 0x7bc88a37f6c4b123,
-    .minimum_zig_version = "0.15.2",
-    .dependencies = .{},
+    .minimum_zig_version = "0.16.0",
+    .dependencies = .{
+        .zdir = .{
+            .url = "git+https://github.com/Jan200101/zdir#ceb3f5eba0140a8c3cdb27380262023f7ae029ce",
+            .hash = "zdir-0.0.0-jbfI9ODEAQDUmpUAZ6_9lTrEj_BUsOZ3FavpbELHXSa2",
+        },
+    },
     .paths = .{
         "build.zig",
         "build.zig.zon",

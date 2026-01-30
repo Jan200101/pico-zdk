@@ -66,6 +66,9 @@ const SOCK = c_decl.getValue("SOCK");
 const socklen_t = c_decl.getValue("socklen_t");
 const SOL = c_decl.getValue("SOL");
 const SO = c_decl.getValue("SO");
+const Stat = c_decl.getValue("Stat");
+const timespec = c_decl.getValue("timespec");
+const S = c_decl.getValue("S");
 
 pub fn cwd() Dir {
     return .{
@@ -320,11 +323,15 @@ fn dirStat(_: ?*anyopaque, _: Dir) Dir.StatError!Dir.Stat {
 
 fn dirStatFile(
     _: ?*anyopaque,
-    _: Dir,
-    _: []const u8,
+    dir: Dir,
+    sub_path: []const u8,
     _: Dir.StatFileOptions,
 ) Dir.StatFileError!File.Stat {
-    @panic("dirStatFile unimplemented");
+    if (dir.handle == AT.FDCWD) {
+        return try system.stat(sub_path);
+    }
+
+    return error.NoDevice;
 }
 
 fn dirAccess(
@@ -390,15 +397,37 @@ fn dirOpenFile(
 
 fn dirOpenDir(
     _: ?*anyopaque,
-    _: Dir,
-    _: []const u8,
-    _: Dir.OpenOptions,
+    dir: Dir,
+    sub_path: []const u8,
+    flags: Dir.OpenOptions,
 ) Dir.OpenError!Dir {
-    @panic("dirOpenDir unimplemented");
+    _ = flags;
+
+    const f: O = .{
+        .ACCMODE = .RDONLY,
+        .DIRECTORY = true,
+    };
+
+    std.debug.print("dirOpenDir {} {s}\n", .{ dir, sub_path });
+
+    if (dir.handle == AT.FDCWD) {
+        if (std.mem.eql(u8, sub_path, ".")) {
+            return .{ .handle = AT.FDCWD };
+        }
+
+        const fd = try system.open(sub_path, f, 0);
+        return .{ .handle = fd };
+    }
+
+    return error.NoDevice;
 }
 
-fn dirClose(_: ?*anyopaque, _: []const Dir) void {
-    @panic("dirClose unimplemented");
+fn dirClose(_: ?*anyopaque, dirs: []const Dir) void {
+    for (dirs) |dir| {
+        if (dir.handle == AT.FDCWD)
+            continue;
+        system.close(dir.handle);
+    }
 }
 
 fn dirRead(_: ?*anyopaque, _: *Dir.Reader, _: []Dir.Entry) Dir.Reader.Error!usize {
@@ -791,12 +820,12 @@ fn netListenIp(
     const socket_fd = try system.socket(family, flags, protocol);
     errdefer system.close(socket_fd);
 
-    //if (options.reuse_address) {
-    //    std.debug.print("setting opts\n", .{});
-    //    try system.setsockopt(socket_fd, SOL.SOCKET, SO.REUSEADDR, 1);
-    //    if (@hasDecl(SO, "REUSEPORT"))
-    //       try system.setsockopt(socket_fd, SOL.SOCKET, SO.REUSEPORT, 1);
-    //}
+    if (options.reuse_address) {
+        std.debug.print("setting opts\n", .{});
+        try system.setsockopt(socket_fd, SOL.SOCKET, SO.REUSEADDR, 1);
+        if (@hasDecl(SO, "REUSEPORT"))
+            try system.setsockopt(socket_fd, SOL.SOCKET, SO.REUSEPORT, 1);
+    }
 
     var storage: PosixAddress = undefined;
     const addr_len = addressToPosix(&address, &storage);
@@ -1075,6 +1104,20 @@ fn address6ToPosix(a: *const net.Ip6Address) sockaddr.in6 {
     };
 }
 
+fn statFromPosix(_: *const Stat) File.Stat {
+    return .{
+        .inode = 0,
+        .nlink = 0,
+        .size = 0,
+        .permissions = .default_file,
+        .kind = .unknown,
+        .atime = .{ .nanoseconds = 0 },
+        .mtime = .{ .nanoseconds = 0 },
+        .ctime = .{ .nanoseconds = 0 },
+        .block_size = 0,
+    };
+}
+
 const system = struct {
     fn toPosixPath(file_path: []const u8) error{NameTooLong}![PATH_MAX - 1:0]u8 {
         if (std.debug.runtime_safety) assert(mem.findScalar(u8, file_path, 0) == null);
@@ -1090,7 +1133,7 @@ const system = struct {
         return if (rc == -1) @enumFromInt(_errno().*) else .SUCCESS;
     }
 
-    pub fn open(file_path: []const u8, flags: O, perm: mode_t) File.OpenError!fd_t {
+    pub fn open(file_path: []const u8, flags: O, perm: mode_t) !fd_t {
         const file_path_c = try toPosixPath(file_path);
 
         while (true) {
@@ -1102,9 +1145,9 @@ const system = struct {
                 .FAULT => unreachable,
                 .INVAL => return error.BadPathName,
                 .ACCES => return error.AccessDenied,
-                .FBIG => return error.FileTooBig,
-                .OVERFLOW => return error.FileTooBig,
-                .ISDIR => return error.IsDir,
+                //.FBIG => return error.FileTooBig,
+                //.OVERFLOW => return error.FileTooBig,
+                //.ISDIR => return error.IsDir,
                 .LOOP => return error.SymLinkLoop,
                 .MFILE => return error.ProcessFdQuotaExceeded,
                 .NAMETOOLONG => return error.NameTooLong,
@@ -1112,11 +1155,11 @@ const system = struct {
                 .NODEV => return error.NoDevice,
                 .NOENT => return error.FileNotFound,
                 .NOMEM => return error.SystemResources,
-                .NOSPC => return error.NoSpaceLeft,
+                //.NOSPC => return error.NoSpaceLeft,
                 .NOTDIR => return error.NotDir,
                 .PERM => return error.PermissionDenied,
-                .EXIST => return error.PathAlreadyExists,
-                .BUSY => return error.DeviceBusy,
+                //.EXIST => return error.PathAlreadyExists,
+                //.BUSY => return error.DeviceBusy,
                 else => return error.Unexpected,
             }
         }
@@ -1318,13 +1361,32 @@ const system = struct {
         }
     }
 
-    fn setsockopt(sock: socket_t, level: i32, opt_name: u32, option: u32) !void {
+    pub fn setsockopt(sock: socket_t, level: i32, opt_name: u32, option: u32) !void {
         const o: []const u8 = @ptrCast(&option);
         while (true) {
             const rc = private.setsockopt(sock, level, opt_name, o.ptr, @intCast(o.len));
             switch (errno(rc)) {
                 .SUCCESS => return,
                 .INTR => continue,
+                else => return error.Unexpected,
+            }
+        }
+    }
+
+    pub fn stat(file_path: []const u8) !File.Stat {
+        const file_path_c = try toPosixPath(file_path);
+
+        while (true) {
+            var statbuf = mem.zeroes(Stat);
+            const rc = private.stat(&file_path_c, &statbuf);
+            switch (errno(rc)) {
+                .SUCCESS => return statFromPosix(&statbuf),
+                .INTR => continue,
+
+                .INVAL => unreachable,
+                .BADF => unreachable, // Always a race condition.
+                .NOMEM => return error.SystemResources,
+                .ACCES => return error.AccessDenied,
                 else => return error.Unexpected,
             }
         }
@@ -1343,5 +1405,6 @@ const system = struct {
         extern "c" fn accept(sockfd: fd_t, noalias addr: ?*sockaddr, noalias addrlen: ?*socklen_t) c_int;
         extern "c" fn connect(sockfd: fd_t, sock_addr: *const sockaddr, addrlen: socklen_t) c_int;
         extern "c" fn setsockopt(sockfd: fd_t, level: i32, optname: u32, optval: ?*const anyopaque, optlen: socklen_t) c_int;
+        extern "c" fn stat(path: [*:0]const u8, statbuf: ?*const Stat) c_int;
     };
 };

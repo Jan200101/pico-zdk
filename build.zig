@@ -9,12 +9,20 @@ pub fn build(b: *std.Build) void {
     const options = b.addOptions();
     options.addOption(bool, "networking", networking);
 
+    const zdir_core = b.dependency("zdir", .{
+        .target = target,
+        .optimize = optimize,
+    }).module("core");
+
     const lib_mod = b.createModule(.{
         .root_source_file = b.path("src/lib.zig"),
         .target = target,
         .optimize = optimize,
         .link_libc = true,
         .single_threaded = true,
+        .imports = &.{
+            .{ .name = "zdir", .module = zdir_core },
+        },
     });
     lib_mod.addOptions("options", options);
 
@@ -31,8 +39,10 @@ pub fn build(b: *std.Build) void {
             .target = target,
             .optimize = optimize,
             .link_libc = true,
+            .imports = &.{
+                .{ .name = "lib", .module = lib_mod },
+            },
         });
-        exe_mod.addOptions("options", options);
 
         const exe = b.addExecutable(.{
             .name = "native_test",
