@@ -119,7 +119,7 @@ fn http_server_impl() !void {
     const io = CIO.io();
 
     const addr = try IpAddress.parseIp4("0.0.0.0", 9999);
-    var server = try IpAddress.listen(addr, io, .{ .reuse_address = true });
+    var server = try addr.listen(io, .{ .reuse_address = true });
     defer server.deinit(io);
 
     std.debug.print("Starting HTTP server at http://{f}\n", .{addr});
@@ -158,5 +158,5 @@ fn http_server_impl() !void {
 }
 
 fn handleRequest(request: *HttpServer.Request) !void {
-    try request.respond("Hello World!", .{});
+    try request.respond("Hello from RP2040", .{});
 }

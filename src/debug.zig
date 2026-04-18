@@ -12,11 +12,19 @@ pub const SelfInfo = struct {
 
     const Error = std.debug.SelfInfoError;
 
-    pub fn getSymbol(_: *SelfInfo, _: Allocator, _: Io, _: usize) Error!std.debug.Symbol {
+    pub fn getSymbols(
+        _: *SelfInfo,
+        _: Io,
+        _: Allocator,
+        _: Allocator,
+        _: usize,
+        _: bool,
+        _: *std.ArrayList(std.debug.Symbol),
+    ) Error!void {
         return error.MissingDebugInfo;
     }
 
-    pub fn getModuleName(_: *SelfInfo, _: Allocator, _: usize) Error![]const u8 {
+    pub fn getModuleName(_: *SelfInfo, _: Io, _: usize) Error![]const u8 {
         return error.MissingDebugInfo;
     }
 };
@@ -46,7 +54,7 @@ pub fn panic(msg: []const u8, first_trace_addr: ?usize) noreturn {
 
             if (@errorReturnTrace()) |t| if (t.index > 0) {
                 writer.writeAll("error return context:\n") catch break :trace;
-                debug.writeStackTrace(t, stderr) catch break :trace;
+                debug.writeErrorReturnTrace(t, stderr) catch break :trace;
                 writer.writeAll("\nstack trace:\n") catch break :trace;
             };
 

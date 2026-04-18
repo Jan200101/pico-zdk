@@ -5,9 +5,11 @@ pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{});
 
     const networking = b.option(bool, "networking", "") orelse true;
+    const support_reuseaddr = b.option(bool, "support_reuseaddr", "") orelse true;
 
     const options = b.addOptions();
     options.addOption(bool, "networking", networking);
+    options.addOption(bool, "support_reuseaddr", support_reuseaddr);
 
     const lib_mod = b.createModule(.{
         .root_source_file = b.path("src/lib.zig"),

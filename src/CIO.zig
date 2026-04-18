@@ -21,8 +21,13 @@ const socket_t = posix.socket_t;
 
 const root = @import("root");
 
-const has_networking = if (@hasDecl(root, "options") and @hasDecl(root.options, "networking"))
+const have_networking = if (@hasDecl(root, "options") and @hasDecl(root.options, "networking"))
     root.options.networking
+else
+    true;
+
+const support_reuseaddr = if (@hasDecl(root, "options") and @hasDecl(root.options, "support_reuseaddr"))
+    root.options.support_reuseaddr
 else
     true;
 
@@ -77,11 +82,12 @@ pub fn io() Io {
     return .{
         .userdata = null,
         .vtable = &.{
+            .crashHandler = crashHandler,
+
             .async = async,
             .concurrent = concurrent,
             .await = await,
             .cancel = cancel,
-            .select = select,
 
             .groupAsync = groupAsync,
             .groupConcurrent = groupConcurrent,
@@ -95,6 +101,11 @@ pub fn io() Io {
             .futexWait = futexWait,
             .futexWaitUncancelable = futexWaitUncancelable,
             .futexWake = futexWake,
+
+            .operate = operate,
+            .batchAwaitAsync = batchAwaitAsync,
+            .batchAwaitConcurrent = batchAwaitConcurrent,
+            .batchCancel = batchCancel,
 
             .dirCreateDir = dirCreateDir,
             .dirCreateDirPath = dirCreateDirPath,
@@ -126,11 +137,9 @@ pub fn io() Io {
             .fileStat = fileStat,
             .fileLength = fileLength,
             .fileClose = fileClose,
-            .fileWriteStreaming = fileWriteStreaming,
             .fileWritePositional = fileWritePositional,
             .fileWriteFileStreaming = fileWriteFileStreaming,
             .fileWriteFilePositional = fileWriteFilePositional,
-            .fileReadStreaming = fileReadStreaming,
             .fileReadPositional = fileReadPositional,
             .fileSeekBy = fileSeekBy,
             .fileSeekTo = fileSeekTo,
@@ -159,7 +168,9 @@ pub fn io() Io {
             .lockStderr = lockStderr,
             .tryLockStderr = tryLockStderr,
             .unlockStderr = unlockStderr,
+            .processCurrentPath = processCurrentPath,
             .processSetCurrentDir = processSetCurrentDir,
+            .processSetCurrentPath = processSetCurrentPath,
             .processReplace = processReplace,
             .processReplacePath = processReplacePath,
             .processSpawn = processSpawn,
@@ -170,6 +181,7 @@ pub fn io() Io {
             .progressParentFile = progressParentFile,
 
             .now = now,
+            .clockResolution = clockResolution,
             .sleep = sleep,
 
             .random = random,
@@ -181,18 +193,22 @@ pub fn io() Io {
             .netBindIp = netBindIp,
             .netConnectIp = netConnectIp,
             .netConnectUnix = netConnectUnix,
+            .netSocketCreatePair = netSocketCreatePair,
             .netClose = netClose,
             .netShutdown = netShutdown,
             .netRead = netRead,
             .netWrite = netWrite,
             .netWriteFile = netWriteFile,
             .netSend = netSend,
-            .netReceive = netReceive,
             .netInterfaceNameResolve = netInterfaceNameResolve,
             .netInterfaceName = netInterfaceName,
             .netLookup = netLookup,
         },
     };
+}
+
+fn crashHandler(_: ?*anyopaque) void {
+    return;
 }
 
 fn async(
@@ -235,16 +251,12 @@ fn cancel(
     @panic("cancel unimplemented");
 }
 
-fn select(_: ?*anyopaque, _: []const *Io.AnyFuture) Io.Cancelable!usize {
-    @panic("select unimplemented");
-}
-
 fn groupAsync(
     _: ?*anyopaque,
     _: *Io.Group,
     _: []const u8,
     _: Alignment,
-    _: *const fn (_: *const anyopaque) Io.Cancelable!void,
+    _: *const fn (_: *const anyopaque) void,
 ) void {
     @panic("groupAsync unimplemented");
 }
@@ -254,7 +266,7 @@ fn groupConcurrent(
     _: *Io.Group,
     _: []const u8,
     _: Alignment,
-    _: *const fn (_: *const anyopaque) Io.Cancelable!void,
+    _: *const fn (_: *const anyopaque) void,
 ) Io.ConcurrentError!void {
     @panic("groupConcurrent unimplemented");
 }
@@ -289,6 +301,45 @@ fn futexWaitUncancelable(_: ?*anyopaque, _: *const u32, _: u32) void {
 
 fn futexWake(_: ?*anyopaque, _: *const u32, _: u32) void {
     @panic("futexWake unimplemented");
+}
+
+fn operate(userdata: ?*anyopaque, operation: Io.Operation) Io.Cancelable!Io.Operation.Result {
+    switch (operation) {
+        .file_read_streaming => |o| return .{
+            .file_read_streaming = fileReadStreaming(userdata, o.file, o.data) catch |err| switch (err) {
+                error.Canceled => |e| return e,
+                else => |e| e,
+            },
+        },
+        .file_write_streaming => |o| return .{
+            .file_write_streaming = fileWriteStreaming(userdata, o.file, o.header, o.data, o.splat) catch |err| switch (err) {
+                error.Canceled => |e| return e,
+                else => |e| e,
+            },
+        },
+        .device_io_control => |*o| return .{ .device_io_control = try deviceIoControl(o) },
+        .net_receive => |*o| return .{ .net_receive = o: {
+            if (!have_networking) break :o .{ error.NetworkDown, 0 };
+            netReceive(userdata, o.socket_handle, o.message_buffer, o.data_buffer, o.flags, .none) catch |err| switch (err) {
+                error.Canceled => |e| return e,
+                error.WouldBlock => unreachable,
+                else => |e| break :o .{ e, 0 },
+            };
+            break :o .{ null, 1 };
+        } },
+    }
+}
+
+fn batchAwaitAsync(_: ?*anyopaque, _: *Io.Batch) Io.Cancelable!void {
+    @panic("batchAwaitAsync unimplemented");
+}
+
+fn batchAwaitConcurrent(_: ?*anyopaque, _: *Io.Batch, _: Io.Timeout) Io.Batch.AwaitConcurrentError!void {
+    @panic("batchAwaitConcurrent unimplemented");
+}
+
+fn batchCancel(_: ?*anyopaque, _: *Io.Batch) void {
+    @panic("batchCancel unimplemented");
 }
 
 fn dirCreateDir(_: ?*anyopaque, _: Dir, _: []const u8, _: Dir.Permissions) Dir.CreateDirError!void {
@@ -351,7 +402,7 @@ fn dirCreateFile(
 
     if (dir.handle == AT.FDCWD) {
         const fd = try system.open(sub_path, f, 0);
-        return .{ .handle = fd };
+        return .{ .handle = fd, .flags = .{ .nonblocking = false } };
     }
 
     return error.NoDevice;
@@ -382,7 +433,7 @@ fn dirOpenFile(
 
     if (dir.handle == AT.FDCWD) {
         const fd = try system.open(sub_path, f, 0);
-        return .{ .handle = fd };
+        return .{ .handle = fd, .flags = .{ .nonblocking = false } };
     }
 
     return error.NoDevice;
@@ -683,7 +734,7 @@ fn fileMemoryMapDestroy(
 fn fileMemoryMapSetLength(
     _: ?*anyopaque,
     _: *File.MemoryMap,
-    _: File.MemoryMap.CreateOptions,
+    _: usize,
 ) File.MemoryMap.SetLengthError!void {
     @panic("fileMemoryMapSetLength unimplemented");
 }
@@ -727,8 +778,16 @@ fn unlockStderr(_: ?*anyopaque) void {
     stderr_writer.interface.buffer = &.{};
 }
 
+fn processCurrentPath(_: ?*anyopaque, _: []u8) process.CurrentPathError!usize {
+    @panic("processCurrentPath unimplemented");
+}
+
 fn processSetCurrentDir(_: ?*anyopaque, _: Dir) process.SetCurrentDirError!void {
     @panic("processSetCurrentDir unimplemented");
+}
+
+fn processSetCurrentPath(_: ?*anyopaque, _: []const u8) std.process.SetCurrentPathError!void {
+    @panic("processSetCurrentPath unimplemented");
 }
 
 fn processReplace(_: ?*anyopaque, _: process.ReplaceOptions) process.ReplaceError {
@@ -759,11 +818,15 @@ fn progressParentFile(_: ?*anyopaque) std.Progress.ParentFileError!File {
     @panic("progressParentFile unimplemented");
 }
 
-fn now(_: ?*anyopaque, _: Io.Clock) Io.Clock.Error!Io.Timestamp {
+fn now(_: ?*anyopaque, _: Io.Clock) Io.Timestamp {
     @panic("now unimplemented");
 }
 
-fn sleep(_: ?*anyopaque, _: Io.Timeout) Io.SleepError!void {
+fn clockResolution(_: ?*anyopaque, _: Io.Clock) Io.Clock.ResolutionError!Io.Duration {
+    @panic("clockResolution unimplemented");
+}
+
+fn sleep(_: ?*anyopaque, _: Io.Timeout) Io.Cancelable!void {
     @panic("sleep unimplemented");
 }
 
@@ -777,13 +840,13 @@ fn randomSecure(_: ?*anyopaque, _: []u8) Io.RandomSecureError!void {
 
 fn netListenIp(
     _: ?*anyopaque,
-    address: IpAddress,
+    address: *const IpAddress,
     options: IpAddress.ListenOptions,
-) IpAddress.ListenError!net.Server {
-    if (!has_networking)
+) IpAddress.ListenError!net.Socket {
+    if (!have_networking)
         return error.NetworkDown;
 
-    const family = posixAddressFamily(&address);
+    const family = posixAddressFamily(address);
     const mode = posixSocketMode(options.mode);
     const protocol = posixProtocol(options.protocol);
 
@@ -791,24 +854,22 @@ fn netListenIp(
     const socket_fd = try system.socket(family, flags, protocol);
     errdefer system.close(socket_fd);
 
-    //if (options.reuse_address) {
-    //    std.debug.print("setting opts\n", .{});
-    //    try system.setsockopt(socket_fd, SOL.SOCKET, SO.REUSEADDR, 1);
-    //    if (@hasDecl(SO, "REUSEPORT"))
-    //       try system.setsockopt(socket_fd, SOL.SOCKET, SO.REUSEPORT, 1);
-    //}
+    if (support_reuseaddr and options.reuse_address) {
+        std.debug.print("setting opts\n", .{});
+        try system.setsockopt(socket_fd, SOL.SOCKET, SO.REUSEADDR, 1);
+        if (@hasDecl(SO, "REUSEPORT"))
+            try system.setsockopt(socket_fd, SOL.SOCKET, SO.REUSEPORT, 1);
+    }
 
     var storage: PosixAddress = undefined;
-    const addr_len = addressToPosix(&address, &storage);
+    const addr_len = addressToPosix(address, &storage);
     try system.bind(socket_fd, &storage.any, addr_len);
 
     try system.listen(socket_fd, 128);
 
     return .{
-        .socket = .{
-            .handle = socket_fd,
-            .address = addressFromPosix(&storage),
-        },
+        .handle = socket_fd,
+        .address = addressFromPosix(&storage),
     };
 }
 
@@ -820,8 +881,8 @@ fn netListenUnix(
     return error.NetworkDown;
 }
 
-fn netAccept(_: ?*anyopaque, listen_fd: net.Socket.Handle) net.Server.AcceptError!net.Stream {
-    if (!has_networking)
+fn netAccept(_: ?*anyopaque, listen_fd: net.Socket.Handle, _: net.Server.AcceptOptions) net.Server.AcceptError!net.Socket {
+    if (!have_networking)
         return error.NetworkDown;
 
     var storage: PosixAddress = undefined;
@@ -830,10 +891,8 @@ fn netAccept(_: ?*anyopaque, listen_fd: net.Socket.Handle) net.Server.AcceptErro
     const req_fd = try system.accept(listen_fd, &storage.any, &addr_len);
 
     return .{
-        .socket = .{
-            .handle = req_fd,
-            .address = addressFromPosix(&storage),
-        },
+        .handle = req_fd,
+        .address = addressFromPosix(&storage),
     };
 }
 
@@ -842,7 +901,7 @@ fn netBindIp(
     address: *const IpAddress,
     options: IpAddress.BindOptions,
 ) IpAddress.BindError!net.Socket {
-    if (!has_networking)
+    if (!have_networking)
         return error.NetworkDown;
 
     const family = posixAddressFamily(address);
@@ -867,8 +926,8 @@ fn netConnectIp(
     _: ?*anyopaque,
     address: *const IpAddress,
     options: IpAddress.ConnectOptions,
-) IpAddress.ConnectError!net.Stream {
-    if (!has_networking)
+) IpAddress.ConnectError!net.Socket {
+    if (!have_networking)
         return error.NetworkDown;
 
     const family = posixAddressFamily(address);
@@ -884,10 +943,8 @@ fn netConnectIp(
     try system.connect(socket_fd, &storage.any, addr_len);
 
     return .{
-        .socket = .{
-            .handle = socket_fd,
-            .address = addressFromPosix(&storage),
-        },
+        .handle = socket_fd,
+        .address = addressFromPosix(&storage),
     };
 }
 
@@ -898,8 +955,12 @@ fn netConnectUnix(
     return error.NetworkDown;
 }
 
+fn netSocketCreatePair(_: ?*anyopaque, _: net.Socket.CreatePairOptions) net.Socket.CreatePairError![2]net.Socket {
+    @panic("netSocketCreatePair unimplemented");
+}
+
 fn netClose(_: ?*anyopaque, handles: []const net.Socket.Handle) void {
-    if (!has_networking)
+    if (!have_networking)
         return;
 
     for (handles) |handle| system.close(handle);
@@ -910,7 +971,7 @@ fn netShutdown(_: ?*anyopaque, _: net.Socket.Handle, _: net.ShutdownHow) net.Shu
 }
 
 fn netRead(_: ?*anyopaque, handle: net.Socket.Handle, data: [][]u8) net.Stream.Reader.Error!usize {
-    if (!has_networking)
+    if (!have_networking)
         return error.NetworkDown;
 
     for (data) |buf| {
@@ -928,7 +989,7 @@ fn netWrite(
     data: []const []const u8,
     splat: usize,
 ) net.Stream.Writer.Error!usize {
-    if (!has_networking)
+    if (!have_networking)
         return error.NetworkDown;
 
     if (header.len != 0) {
@@ -971,7 +1032,7 @@ fn netReceive(
     _: []u8,
     _: net.ReceiveFlags,
     _: Io.Timeout,
-) struct { ?net.Socket.ReceiveTimeoutError, usize } {
+) (net.Socket.ReceiveError || error{WouldBlock})!void {
     @panic("netReceive unimplemented");
 }
 
@@ -993,6 +1054,10 @@ fn netLookup(
     _: HostName.LookupOptions,
 ) net.HostName.LookupError!void {
     @panic("netLookup unimplemented");
+}
+
+fn deviceIoControl(_: *const Io.Operation.DeviceIoControl) Io.Cancelable!Io.Operation.DeviceIoControl.Result {
+    @panic("deviceIoControl unimplemented");
 }
 
 const PosixAddress = extern union {

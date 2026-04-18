@@ -8,6 +8,7 @@ project(pico-zdk C CXX ASM)
 
 # newlib is used to implement IO in C
 set(PICO_CLIB newlib)
+set(PICO_NO_PICOTOOL 1)
 pico_sdk_init()
 
 find_package(littlefs)
@@ -24,7 +25,9 @@ zig_import_targets(
     PATH "${CMAKE_CURRENT_SOURCE_DIR}"
     COMPILE_TARGET thumb-other-eabi
     COMPILE_CPU cortex_m0plus
-    OPTIONS networking=${ZIG_NETWORKING}
+    OPTIONS
+        networking=${ZIG_NETWORKING}
+        support_reuseaddr=false
     REQUIRED
 )
 
