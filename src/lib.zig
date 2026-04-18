@@ -10,6 +10,9 @@ const IpAddress = net.IpAddress;
 const http = std.http;
 const HttpServer = http.Server;
 
+const log = std.log.scoped(.http);
+const core = @import("zdir");
+
 pub const options = @import("options");
 
 pub const CIO = @import("CIO.zig");
@@ -118,6 +121,9 @@ pub export fn test_http_server() void {
 fn http_server_impl() !void {
     const io = CIO.io();
 
+    var root_dir = try core.getRoot(io);
+    defer root_dir.close(io);
+
     const addr = try IpAddress.parseIp4("0.0.0.0", 9999);
     var server = try addr.listen(io, .{ .reuse_address = true });
     defer server.deinit(io);
@@ -149,7 +155,7 @@ fn http_server_impl() !void {
             switch (request.upgradeRequested()) {
                 .other => |proto| std.debug.print("Unsupported protocol {s}\n", .{proto}),
                 .websocket => std.debug.print("Websocket unsupported\n", .{}),
-                .none => handleRequest(&request) catch |err| {
+                .none => handleRequest(&request, io, root_dir) catch |err| {
                     std.debug.print("failed to handle request: {s}\n", .{@errorName(err)});
                 },
             }
@@ -157,6 +163,41 @@ fn http_server_impl() !void {
     }
 }
 
-fn handleRequest(request: *HttpServer.Request) !void {
-    try request.respond("Hello from RP2040", .{});
+fn handleRequest(request: *HttpServer.Request, io: Io, root_dir: Dir) !void {
+    const base_allocator = std.heap.c_allocator;
+
+    var arena = std.heap.ArenaAllocator.init(base_allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    var response_buffer: [4096]u8 = undefined;
+    var response = try request.respondStreaming(&response_buffer, .{ .respond_options = .{
+        .keep_alive = false,
+    } });
+    defer response.end() catch {};
+    const writer = &response.writer;
+
+    const target = request.head.target;
+    const abs_path, const query = if (std.mem.indexOfPos(u8, target, 0, "?")) |pos|
+        .{ target[0..pos], target[pos..] }
+    else
+        .{ request.head.target, "" };
+
+    _ = query;
+
+    var target_buffer: [1024]u8 = undefined;
+    const resolved_path = std.Uri.percentDecodeBackwards(&target_buffer, abs_path);
+
+    log.debug("requested {s}", .{resolved_path});
+
+    const sane_path = try std.fs.path.resolvePosix(allocator, &[_][]const u8{ "/", resolved_path });
+    defer allocator.free(sane_path);
+
+    if (core.isAsset(sane_path)) {
+        try core.serveAsset(writer, sane_path);
+    } else if (core.canServeFile(io, root_dir, sane_path)) {
+        try core.serveFile(io, root_dir, writer, sane_path);
+    } else {
+        try core.serveDir(allocator, io, root_dir, writer, sane_path);
+    }
 }

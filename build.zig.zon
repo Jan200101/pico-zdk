@@ -3,7 +3,12 @@
     .version = "0.0.0",
     .fingerprint = 0x7bc88a37f6c4b123,
     .minimum_zig_version = "0.16.0",
-    .dependencies = .{},
+    .dependencies = .{
+        .zdir = .{
+            .url = "git+https://codeberg.org/Jan200101/zdir#bdec497d39706012d51f8ffc5ef5d04c89988e05",
+            .hash = "zdir-0.0.0-jbfI9J7BAQBInmXu04l9cuj0--iqGOQ5UgrV2-OZ3bgo",
+        },
+    },
     .paths = .{
         "build.zig",
         "build.zig.zon",

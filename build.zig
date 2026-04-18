@@ -11,12 +11,20 @@ pub fn build(b: *std.Build) void {
     options.addOption(bool, "networking", networking);
     options.addOption(bool, "support_reuseaddr", support_reuseaddr);
 
+    const zdir_core = b.dependency("zdir", .{
+        .target = target,
+        .optimize = optimize,
+    }).module("core");
+
     const lib_mod = b.createModule(.{
         .root_source_file = b.path("src/lib.zig"),
         .target = target,
         .optimize = optimize,
         .link_libc = true,
         .single_threaded = true,
+        .imports = &.{
+            .{ .name = "zdir", .module = zdir_core },
+        },
     });
     lib_mod.addOptions("options", options);
 
