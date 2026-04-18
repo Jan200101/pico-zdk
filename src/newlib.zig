@@ -94,10 +94,12 @@ pub const O = packed struct(u32) {
     ACCMODE: std.posix.ACCMODE = .RDONLY,
     _2: u5 = 0,
     EXCL: bool = false,
-    _4: u1 = 0,
+    _7: u1 = 0,
     CREAT: bool = false,
     TRUNC: bool = false,
-    _7: u21 = 0,
+    _10: u10 = 0,
+    DIRECTORY: bool = false,
+    _21: u10 = 0,
 };
 
 pub const AT = struct {

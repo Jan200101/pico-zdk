@@ -12,7 +12,7 @@ const HttpServer = http.Server;
 
 pub const options = @import("options");
 
-const CIO = @import("CIO.zig");
+pub const CIO = @import("CIO.zig");
 
 pub const c = @import("newlib.zig");
 pub const debug = @import("debug.zig");

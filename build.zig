@@ -33,8 +33,10 @@ pub fn build(b: *std.Build) void {
             .target = target,
             .optimize = optimize,
             .link_libc = true,
+            .imports = &.{
+                .{ .name = "lib", .module = lib_mod },
+            },
         });
-        exe_mod.addOptions("options", options);
 
         const exe = b.addExecutable(.{
             .name = "native_test",
